@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 
 from .formatting import ConversionBlock, format_key_line, render_blocks
-from .parser import parse_input
+from .parser import parse_input, tokenize_progression
 
 NOTE_TO_SEMITONE = {
     "C": 0,
@@ -38,9 +38,8 @@ SEMITONE_TO_DEGREE_MINOR = {0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4", 6:
 MAJOR_DIATONIC = {"1": "", "2": "m", "3": "m", "4": "", "5": "", "6": "m", "7": "dim"}
 MINOR_DIATONIC = {"1": "m", "2": "dim", "b3": "", "4": "m", "5": "m", "b6": "", "b7": ""}
 
-TOKEN_SPLIT_RE = re.compile(r"(\s*-\s*|\s*,\s*|\|)")
 CHORD_RE = re.compile(r"^([A-G](?:#|b)?)([^/]*)?(?:/([A-G](?:#|b)?))?$")
-DEGREE_RE = re.compile(r"^([#b]?[1-7])((?:m|dim|aug|sus2|sus4|)?)((?:\([^)]*\))?)(?:/([#b]?[1-7]))?$")
+DEGREE_RE = re.compile(r"^([#b]?[1-7])((?:m|dim|aug|sus2|sus4)?)((?:\([^)]*\)|(?:maj7|mmaj7|7|6|9|11|13|add\d+|[#b]\d+)*)?)(?:/([#b]?[1-7]))?$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -81,7 +80,7 @@ def _extract_progression(text: str) -> str:
 
 
 def _infer_keys(prog: str) -> list[KeyChoice]:
-    roots = [m.group(1) for t in _split_tokens(prog) if (m := CHORD_RE.match(t.strip()))]
+    roots = [m.group(1) for token in tokenize_progression(prog) if token.kind == "chord" and (m := CHORD_RE.match(token.text.strip()))]
     if not roots:
         return [KeyChoice("C", "Major")]
 
@@ -117,78 +116,135 @@ def _relative_minor(major: str) -> str:
     return "A"
 
 
-def _split_tokens(prog: str) -> list[str]:
-    return [p for p in TOKEN_SPLIT_RE.split(prog) if p != ""]
-
-
 def _convert_chords_to_nns(prog: str, tonic: str, mode: str) -> str:
     t = NOTE_TO_SEMITONE.get(tonic, 0)
-    out = []
-    for tok in _split_tokens(prog):
-        stripped = tok.strip()
+    degree_map = SEMITONE_TO_DEGREE_MINOR if mode == "Minor" else SEMITONE_TO_DEGREE_MAJOR
+    out: list[str] = []
+
+    for token in tokenize_progression(prog):
+        if token.kind == "separator":
+            out.append(token.text)
+            continue
+        if token.kind != "chord":
+            out.append(token.text)
+            continue
+
+        stripped = token.text.strip()
         m = CHORD_RE.match(stripped)
         if not m:
-            out.append(tok)
+            out.append(token.text)
             continue
+
         root, quality_raw, bass = m.group(1), (m.group(2) or ""), m.group(3)
         if root not in NOTE_TO_SEMITONE:
-            out.append(tok)
+            out.append(token.text)
             continue
-        degree_map = SEMITONE_TO_DEGREE_MINOR if mode == "Minor" else SEMITONE_TO_DEGREE_MAJOR
+
         degree = degree_map[(NOTE_TO_SEMITONE[root] - t) % 12]
-        nns = degree + _quality_to_nns_suffix(degree, quality_raw, mode)
-        nns += _extensions_to_parenthetical(quality_raw)
+        suffix, extension = _parse_chord_quality(quality_raw, degree, mode)
+        nns = degree + suffix
+        if extension:
+            nns += f"({extension})"
         if bass and bass in NOTE_TO_SEMITONE:
             bass_degree = degree_map[(NOTE_TO_SEMITONE[bass] - t) % 12]
             nns += f"/{bass_degree}"
-        out.append(tok.replace(stripped, nns))
-    return "".join(out)
+        out.append(token.text.replace(stripped, nns))
+
+    return "".join(out) if out else prog
 
 
-def _quality_to_nns_suffix(degree: str, quality_raw: str, mode: str) -> str:
-    q = quality_raw.lower()
-    if "dim" in q or "°" in q:
-        return "dim"
-    if "aug" in q or "+" in q:
-        return "aug"
-    if "sus2" in q:
-        return "sus2"
-    if "sus4" in q or "sus" in q:
-        return "sus4"
-    if q.startswith("m") and not q.startswith("maj"):
-        return "m"
+def _parse_chord_quality(quality_raw: str, degree: str, mode: str) -> tuple[str, str]:
+    raw = quality_raw.strip()
+    compact = raw.replace(" ", "")
+    lower = compact.lower()
 
-    defaults = MINOR_DIATONIC if mode == "Minor" else MAJOR_DIATONIC
-    return defaults.get(degree, "")
+    suffix = ""
+    extension = ""
 
+    if "ø" in compact or "m7b5" in lower:
+        suffix = "m"
+        extension = "7b5"
+        lower = lower.replace("ø", "").replace("m7b5", "")
+    elif "dim" in lower or "°" in compact:
+        suffix = "dim"
+        lower = lower.replace("dim", "").replace("°", "")
+    elif "aug" in lower or "+" in compact:
+        suffix = "aug"
+        lower = lower.replace("aug", "").replace("+", "")
+    elif "sus2" in lower:
+        suffix = "sus2"
+        lower = lower.replace("sus2", "")
+    elif "sus4" in lower or "sus" in lower:
+        suffix = "sus4"
+        lower = lower.replace("sus4", "").replace("sus", "")
+    elif lower.startswith("mmaj"):
+        suffix = "m"
+        extension = "maj7"
+        lower = lower[5:]
+    elif lower.startswith("min"):
+        suffix = "m"
+        lower = lower[3:]
+    elif lower.startswith("m") and not lower.startswith("maj"):
+        suffix = "m"
+        lower = lower[1:]
 
-def _extensions_to_parenthetical(quality_raw: str) -> str:
-    q = quality_raw
-    if not q:
-        return ""
-    paren_match = re.search(r"\(([^)]*)\)", q)
-    if paren_match:
-        return f"({paren_match.group(1)})"
-    ext_match = re.search(r"(maj7|mmaj7|7|6|9|11|13|add\d+|[#b]\d+)", q, flags=re.IGNORECASE)
-    return f"({ext_match.group(1)})" if ext_match else ""
+    if lower.startswith("maj7") or compact.startswith("M7"):
+        extension = extension or "maj7"
+        lower = lower.replace("maj7", "", 1)
+    elif lower.startswith("maj") or compact.startswith("M"):
+        lower = lower[3:] if lower.startswith("maj") else lower
+
+    paren = re.search(r"\(([^)]*)\)", compact)
+    if paren:
+        ext_val = paren.group(1).strip()
+        if ext_val:
+            extension = ext_val
+    else:
+        ext_tokens = re.findall(r"(?:add\d+|[#b]\d+|6|7|9|11|13|alt)", lower, flags=re.IGNORECASE)
+        merged = "".join(ext_tokens)
+        if extension and merged and merged not in extension:
+            extension = extension + merged
+        elif merged and not extension:
+            extension = merged
+
+    if not suffix:
+        defaults = MINOR_DIATONIC if mode == "Minor" else MAJOR_DIATONIC
+        suffix = defaults.get(degree, "")
+
+    return suffix, extension
 
 
 def _convert_nns_to_chords(prog: str, tonic: str, mode: str) -> str:
     t = NOTE_TO_SEMITONE.get(tonic, 0)
-    out = []
-    for tok in _split_tokens(prog):
-        stripped = tok.strip()
+    out: list[str] = []
+
+    for token in tokenize_progression(prog):
+        if token.kind == "separator":
+            out.append(token.text)
+            continue
+
+        stripped = token.text.strip()
         m = DEGREE_RE.match(stripped)
         if not m:
-            out.append(tok)
+            out.append(token.text)
             continue
-        degree, suffix, ext, bass = m.groups()
+
+        degree, suffix, ext_raw, bass = m.groups()
         root = _degree_to_note(degree, t)
-        chord = root + _suffix_to_chord_quality(suffix, degree, mode) + ext
+        chord = root + _suffix_to_chord_quality(suffix, degree, mode) + _normalize_extension_for_chord(ext_raw)
         if bass:
             chord += f"/{_degree_to_note(bass, t)}"
-        out.append(tok.replace(stripped, chord))
-    return "".join(out)
+        out.append(token.text.replace(stripped, chord))
+
+    return "".join(out) if out else prog
+
+
+def _normalize_extension_for_chord(ext_raw: str) -> str:
+    if not ext_raw:
+        return ""
+    if ext_raw.startswith("(") and ext_raw.endswith(")"):
+        return ext_raw
+    return f"({ext_raw})"
 
 
 def _degree_to_note(degree: str, tonic_semitone: int) -> str:
@@ -200,6 +256,6 @@ def _degree_to_note(degree: str, tonic_semitone: int) -> str:
 
 def _suffix_to_chord_quality(suffix: str, degree: str, mode: str) -> str:
     if suffix:
-        return suffix.replace("dim", "dim")
+        return suffix
     defaults = MINOR_DIATONIC if mode == "Minor" else MAJOR_DIATONIC
     return defaults.get(degree, "")
