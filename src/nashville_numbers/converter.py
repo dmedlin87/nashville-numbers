@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from .output_contract import OutputBlock, build_output
-from .key_inference import KeyChoice, NOTE_TO_SEMITONE, infer_keys, infer_sections
+from .key_inference import NOTE_TO_SEMITONE, infer_keys, infer_sections
 from .parser import parse_input, tokenize_progression
 
 SEMITONE_TO_DEGREE_MAJOR = {0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4", 6: "#4", 7: "5", 8: "b6", 9: "6", 10: "b7", 11: "7"}
