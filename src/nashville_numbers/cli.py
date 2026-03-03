@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 from .converter import convert
@@ -36,9 +37,31 @@ Output format:
   When the key is ambiguous, up to 3 candidate interpretations are shown,
   each separated by a blank line. Supply an explicit key to get one result.
 
-  NNS input without a key outputs exactly:
+  NNS input without a key outputs:
     Key: REQUIRED
+  and exits with status 1.
+
+Color output is enabled automatically when writing to a terminal.
+Set NO_COLOR=1 or pipe the output to disable it.
 """
+
+_KEY_COLOR = "\033[1;36m"  # bold cyan
+_RESET = "\033[0m"
+
+
+def _use_color() -> bool:
+    return sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+
+
+def _colorize(text: str) -> str:
+    """Highlight 'Key:' header lines in bold cyan for terminal readability."""
+    lines = []
+    for line in text.split("\n"):
+        if line.startswith("Key:"):
+            lines.append(f"{_KEY_COLOR}{line}{_RESET}")
+        else:
+            lines.append(line)
+    return "\n".join(lines)
 
 
 def main() -> None:
@@ -63,7 +86,13 @@ def main() -> None:
         print("Error: no input provided. Run 'nns-convert --help' for usage.", file=sys.stderr)
         sys.exit(1)
 
-    print(convert(input_text))
+    result = convert(input_text)
+
+    if result == "Key: REQUIRED":
+        print(result)
+        sys.exit(1)
+
+    print(_colorize(result) if _use_color() else result)
 
 
 if __name__ == "__main__":
