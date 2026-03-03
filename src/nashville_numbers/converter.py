@@ -16,6 +16,7 @@ MINOR_DIATONIC = {"1": "m", "2": "dim", "b3": "", "4": "m", "5": "m", "b6": "", 
 
 CHORD_RE = re.compile(r"^([A-G](?:#|b)?)([^/]*)?(?:/([A-G](?:#|b)?))?$")
 DEGREE_RE = re.compile(r"^([#b]?[1-7])((?:m|dim|aug|sus2|sus4)?)((?:\([^)]*\)|(?:maj7|mmaj7|7|6|9|11|13|add\d+|[#b]\d+)*)?)(?:/([#b]?[1-7]))?$", re.IGNORECASE)
+EXT_TOKENS_RE = re.compile(r"(?:add\d+|[#b]\d+|6|7|9|11|13|alt)", flags=re.IGNORECASE)
 
 
 def convert(input_text: str) -> str:
@@ -139,7 +140,7 @@ def _parse_chord_quality(_root: str, quality_raw: str, degree: str, mode: str) -
         if ext_val:
             extension = ext_val
     else:
-        ext_tokens = re.findall(r"(?:add\d+|[#b]\d+|6|7|9|11|13|alt)", lower, flags=re.IGNORECASE)
+        ext_tokens = EXT_TOKENS_RE.findall(lower)
         merged = "".join(ext_tokens)
         if extension and merged and merged not in extension:
             extension = extension + merged
