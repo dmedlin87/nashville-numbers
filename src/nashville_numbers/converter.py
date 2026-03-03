@@ -8,8 +8,7 @@ from .output_contract import OutputBlock, build_output
 from .key_inference import NOTE_TO_SEMITONE, infer_keys, infer_sections
 from .parser import parse_input, tokenize_progression
 
-SEMITONE_TO_DEGREE_MAJOR = {0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4", 6: "#4", 7: "5", 8: "b6", 9: "6", 10: "b7", 11: "7"}
-SEMITONE_TO_DEGREE_MINOR = {0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4", 6: "#4", 7: "5", 8: "b6", 9: "6", 10: "b7", 11: "7"}
+SEMITONE_TO_DEGREE = {0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4", 6: "#4", 7: "5", 8: "b6", 9: "6", 10: "b7", 11: "7"}
 
 MAJOR_DIATONIC = {"1": "", "2": "m", "3": "m", "4": "", "5": "", "6": "m", "7": "dim"}
 MINOR_DIATONIC = {"1": "m", "2": "dim", "b3": "", "4": "m", "5": "m", "b6": "", "b7": ""}
@@ -57,7 +56,7 @@ def _extract_progression(text: str) -> str:
 
 def _convert_chords_to_nns(prog: str, tonic: str, mode: str) -> str:
     t = NOTE_TO_SEMITONE.get(tonic, 0)
-    degree_map = SEMITONE_TO_DEGREE_MINOR if mode == "Minor" else SEMITONE_TO_DEGREE_MAJOR
+    degree_map = SEMITONE_TO_DEGREE
     out: list[str] = []
 
     for token in tokenize_progression(prog):
