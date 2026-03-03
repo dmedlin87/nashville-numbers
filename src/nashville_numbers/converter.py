@@ -3,34 +3,10 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 
 from .formatting import ConversionBlock, format_key_line, render_blocks
+from .key_inference import KeyChoice, NOTE_TO_SEMITONE, infer_keys, infer_sections
 from .parser import parse_input, tokenize_progression
-
-NOTE_TO_SEMITONE = {
-    "C": 0,
-    "B#": 0,
-    "C#": 1,
-    "Db": 1,
-    "D": 2,
-    "D#": 3,
-    "Eb": 3,
-    "E": 4,
-    "Fb": 4,
-    "F": 5,
-    "E#": 5,
-    "F#": 6,
-    "Gb": 6,
-    "G": 7,
-    "G#": 8,
-    "Ab": 8,
-    "A": 9,
-    "A#": 10,
-    "Bb": 10,
-    "B": 11,
-    "Cb": 11,
-}
 
 SEMITONE_TO_DEGREE_MAJOR = {0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4", 6: "#4", 7: "5", 8: "b6", 9: "6", 10: "b7", 11: "7"}
 SEMITONE_TO_DEGREE_MINOR = {0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4", 6: "#4", 7: "5", 8: "b6", 9: "6", 10: "b7", 11: "7"}
@@ -40,12 +16,6 @@ MINOR_DIATONIC = {"1": "m", "2": "dim", "b3": "", "4": "m", "5": "m", "b6": "", 
 
 CHORD_RE = re.compile(r"^([A-G](?:#|b)?)([^/]*)?(?:/([A-G](?:#|b)?))?$")
 DEGREE_RE = re.compile(r"^([#b]?[1-7])((?:m|dim|aug|sus2|sus4)?)((?:\([^)]*\)|(?:maj7|mmaj7|7|6|9|11|13|add\d+|[#b]\d+)*)?)(?:/([#b]?[1-7]))?$", re.IGNORECASE)
-
-
-@dataclass(frozen=True)
-class KeyChoice:
-    tonic: str
-    mode: str
 
 
 def convert(input_text: str) -> str:
@@ -65,11 +35,17 @@ def convert(input_text: str) -> str:
         converted = _convert_chords_to_nns(progression, parsed.key_tonic, mode)
         return render_blocks([ConversionBlock(format_key_line(parsed.key_tonic, mode), f"{converted} ({progression})")])
 
-    choices = _infer_keys(progression)
+    sections = infer_sections(progression)
     blocks = []
-    for choice in choices:
-        converted = _convert_chords_to_nns(progression, choice.tonic, choice.mode)
-        blocks.append(ConversionBlock(format_key_line(choice.tonic, choice.mode), f"{converted} ({progression})"))
+    if len(sections) > 1:
+        for section_text, choice in sections:
+            converted = _convert_chords_to_nns(section_text, choice.tonic, choice.mode)
+            blocks.append(ConversionBlock(format_key_line(choice.tonic, choice.mode), f"{converted} ({section_text})"))
+    else:
+        choices = infer_keys(progression)
+        for choice in choices:
+            converted = _convert_chords_to_nns(progression, choice.tonic, choice.mode)
+            blocks.append(ConversionBlock(format_key_line(choice.tonic, choice.mode), f"{converted} ({progression})"))
     return render_blocks(blocks)
 
 
@@ -77,43 +53,6 @@ def _extract_progression(text: str) -> str:
     cleaned = re.sub(r"\b(?:in|key\s*:)[^;\n]+", "", text, flags=re.IGNORECASE)
     cleaned = cleaned.replace(";", " ").strip()
     return cleaned
-
-
-def _infer_keys(prog: str) -> list[KeyChoice]:
-    roots = [m.group(1) for token in tokenize_progression(prog) if token.kind == "chord" and (m := CHORD_RE.match(token.text.strip()))]
-    if not roots:
-        return [KeyChoice("C", "Major")]
-
-    candidates: list[tuple[int, str, str]] = []
-    tonics = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
-    major_scale = {0, 2, 4, 5, 7, 9, 11}
-    minor_scale = {0, 2, 3, 5, 7, 8, 10}
-
-    for tonic in tonics:
-        t = NOTE_TO_SEMITONE[tonic]
-        maj_score = sum(1 for r in roots if (NOTE_TO_SEMITONE.get(r, -1) - t) % 12 in major_scale)
-        min_score = sum(1 for r in roots if (NOTE_TO_SEMITONE.get(r, -1) - t) % 12 in minor_scale)
-        candidates.append((maj_score, tonic, "Major"))
-        candidates.append((min_score, tonic, "Minor"))
-
-    candidates.sort(key=lambda x: x[0], reverse=True)
-    best = candidates[:3]
-
-    if best and best[0][2] == "Major":
-        rel_minor = _relative_minor(best[0][1])
-        rel_tuple = next((c for c in candidates if c[1] == rel_minor and c[2] == "Minor"), None)
-        if rel_tuple and rel_tuple not in best and rel_tuple[0] >= best[0][0] - 1:
-            best = [best[0], rel_tuple, *best[1:2]][:3]
-
-    return [KeyChoice(t, m) for _, t, m in best]
-
-
-def _relative_minor(major: str) -> str:
-    semitone = (NOTE_TO_SEMITONE[major] + 9) % 12
-    for name, val in NOTE_TO_SEMITONE.items():
-        if len(name) <= 2 and val == semitone and "b" not in name:
-            return name
-    return "A"
 
 
 def _convert_chords_to_nns(prog: str, tonic: str, mode: str) -> str:
@@ -141,7 +80,7 @@ def _convert_chords_to_nns(prog: str, tonic: str, mode: str) -> str:
             continue
 
         degree = degree_map[(NOTE_TO_SEMITONE[root] - t) % 12]
-        suffix, extension = _parse_chord_quality(quality_raw, degree, mode)
+        suffix, extension = _parse_chord_quality(root, quality_raw, degree, mode)
         nns = degree + suffix
         if extension:
             nns += f"({extension})"
@@ -153,7 +92,7 @@ def _convert_chords_to_nns(prog: str, tonic: str, mode: str) -> str:
     return "".join(out) if out else prog
 
 
-def _parse_chord_quality(quality_raw: str, degree: str, mode: str) -> tuple[str, str]:
+def _parse_chord_quality(_root: str, quality_raw: str, degree: str, mode: str) -> tuple[str, str]:
     raw = quality_raw.strip()
     compact = raw.replace(" ", "")
     lower = compact.lower()
@@ -210,6 +149,14 @@ def _parse_chord_quality(quality_raw: str, degree: str, mode: str) -> tuple[str,
     if not suffix:
         defaults = MINOR_DIATONIC if mode == "Minor" else MAJOR_DIATONIC
         suffix = defaults.get(degree, "")
+
+    if mode == "Minor" and degree == "5":
+        if quality_raw.strip() == "":
+            suffix = ""
+        elif any(token in lower for token in ("7", "9", "11", "13", "alt")):
+            suffix = ""
+        elif quality_raw.strip() and not lower.startswith("m") and not lower.startswith("min"):
+            suffix = ""
 
     return suffix, extension
 
