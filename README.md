@@ -37,3 +37,12 @@ If key is missing in NNS mode, output is exactly:
 ```text
 Key: REQUIRED
 ```
+
+
+## Maintainer checks
+
+Run the CI-equivalent test command locally:
+
+```bash
+pytest -q
+```
