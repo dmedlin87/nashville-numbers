@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from .formatting import ConversionBlock, format_key_line, render_blocks
+from .output_contract import OutputBlock, build_output
 from .key_inference import KeyChoice, NOTE_TO_SEMITONE, infer_keys, infer_sections
 from .parser import parse_input, tokenize_progression
 
@@ -27,26 +27,26 @@ def convert(input_text: str) -> str:
         mode = parsed.key_mode or "Major"
         progression = _extract_progression(parsed.text)
         converted = _convert_nns_to_chords(progression, parsed.key_tonic, mode)
-        return render_blocks([ConversionBlock(format_key_line(parsed.key_tonic, mode), f"{converted} ({progression})")])
+        return build_output([OutputBlock(parsed.key_tonic, mode, converted)])
 
     progression = _extract_progression(parsed.text)
     if parsed.key_tonic:
         mode = parsed.key_mode or "Major"
         converted = _convert_chords_to_nns(progression, parsed.key_tonic, mode)
-        return render_blocks([ConversionBlock(format_key_line(parsed.key_tonic, mode), f"{converted} ({progression})")])
+        return build_output([OutputBlock(parsed.key_tonic, mode, converted)])
 
     sections = infer_sections(progression)
-    blocks = []
+    blocks: list[OutputBlock] = []
     if len(sections) > 1:
         for section_text, choice in sections:
             converted = _convert_chords_to_nns(section_text, choice.tonic, choice.mode)
-            blocks.append(ConversionBlock(format_key_line(choice.tonic, choice.mode), f"{converted} ({section_text})"))
+            blocks.append(OutputBlock(choice.tonic, choice.mode, converted))
     else:
         choices = infer_keys(progression)
         for choice in choices:
             converted = _convert_chords_to_nns(progression, choice.tonic, choice.mode)
-            blocks.append(ConversionBlock(format_key_line(choice.tonic, choice.mode), f"{converted} ({progression})"))
-    return render_blocks(blocks)
+            blocks.append(OutputBlock(choice.tonic, choice.mode, converted))
+    return build_output(blocks)
 
 
 def _extract_progression(text: str) -> str:
