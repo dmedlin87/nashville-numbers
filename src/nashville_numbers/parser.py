@@ -12,13 +12,16 @@ KEY_RE = re.compile(
 
 SEPARATOR_CHARS = set(" \t\n\r,-|")
 NNS_TOKEN_RE = re.compile(
-    r"^[#b]?[1-7](?:m|dim|aug|sus2|sus4)?(?:\([^)]*\)|(?:maj7|mmaj7|7|6|9|11|13|add\d+|[#b]\d+)*)?(?:/[#b]?[1-7])?$",
+    r"^[#b]?[1-7](?:m|dim|aug|sus2|sus4)?(?:"
+    r"\([^)]*\)|"
+    r"(?=(?P<nns_suffixes>(?:maj7|mmaj7|add\d+|[#b]\d+|7|6|9|11|13)*))(?P=nns_suffixes)"
+    r")?(?:/[#b]?[1-7])?$",
     re.IGNORECASE,
 )
 CHORD_TOKEN_RE = re.compile(
     r"^[A-G](?:#|b)?(?:"
     r"(?:maj|M|min|m|dim|°|ø|aug|\+|sus2|sus4|sus)?"
-    r"(?:maj7|mmaj7|add\d+|[#b]\d+|6|7|9|11|13|alt|\([^)]*\))*"
+    r"(?=(?P<chord_suffixes>(?:maj7|mmaj7|add\d+|[#b]\d+|6|7|9|11|13|alt|\([^)]*\))*))(?P=chord_suffixes)"
     r")?(?:/[A-G](?:#|b)?)?$",
     re.IGNORECASE,
 )
