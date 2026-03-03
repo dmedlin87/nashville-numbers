@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 
 KEY_RE = re.compile(
-    r"(?:\b(?:in|key\s*:)\s*)([A-G](?:#|b)?)(?:\s*(major|minor|mode|ionian|aeolian|dorian|mixolydian|lydian|phrygian|locrian))?",
+    r"(?:\b(?:in|key\s*:)\s*)([A-G](?:#|b)?)(m)?(?:\s*(major|minor|mode|ionian|aeolian|dorian|mixolydian|lydian|phrygian|locrian))?",
     re.IGNORECASE,
 )
 
@@ -72,9 +72,16 @@ def parse_input(input_text: str) -> ParsedInput:
     mode = None
     if key_match:
         tonic = key_match.group(1)
-        raw_mode = key_match.group(2)
-        if raw_mode:
-            mode = "Minor" if raw_mode.lower().startswith("min") or raw_mode.lower() == "aeolian" else "Major"
+        has_m_suffix = bool(key_match.group(2))
+        raw_mode = key_match.group(3)
+        if has_m_suffix:
+            mode = "Minor"
+        elif raw_mode:
+            mode = (
+                "Minor"
+                if raw_mode.lower().startswith("min") or raw_mode.lower() == "aeolian"
+                else "Major"
+            )
 
     progression = re.sub(r"\b(?:in|key\s*:)[^;\n]+", "", text, flags=re.IGNORECASE).replace(";", " ").strip()
     tokens = tokenize_progression(progression)
