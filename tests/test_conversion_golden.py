@@ -73,3 +73,13 @@ def test_deterministic_for_ambiguous_input() -> None:
     first = convert(input_text)
     for _ in range(20):
         assert convert(input_text) == first
+
+
+def test_explicit_key_in_chords_suppresses_candidates() -> None:
+    # Pinning the key should yield exactly one block instead of three candidates.
+    assert convert("C - F - G in C") == "Key: C Major\n1 - 4 - 5"
+
+
+def test_minor_chords_to_nns_with_explicit_key() -> None:
+    # Harmonic context: E is the (major) dominant V in A minor, so it maps to "5".
+    assert convert("Am - G - Dm - E in A minor") == "Key: A Minor\n1m - b7 - 4m - 5"
