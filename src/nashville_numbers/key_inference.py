@@ -32,6 +32,7 @@ NOTE_TO_SEMITONE = {
 }
 
 CANONICAL_TONICS = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+SEMITONE_TO_CANONICAL = {NOTE_TO_SEMITONE[t]: t for t in CANONICAL_TONICS}
 MAJOR_SCALE = {0, 2, 4, 5, 7, 9, 11}
 MINOR_SCALE = {0, 2, 3, 5, 7, 8, 10}
 
@@ -188,7 +189,4 @@ def _relative_major(minor: str) -> str:
 
 
 def _semitone_to_name(semitone: int) -> str:
-    for tonic in CANONICAL_TONICS:
-        if NOTE_TO_SEMITONE[tonic] == semitone:
-            return tonic
-    return "C"
+    return SEMITONE_TO_CANONICAL.get(semitone, "C")
