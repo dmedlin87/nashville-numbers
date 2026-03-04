@@ -7,7 +7,7 @@ Description-Content-Type: text/markdown
 
 # Nashville Numbers Converter
 
-Convert between chord progressions and Nashville Number System (NNS) from the command line.
+Convert between chord progressions and Nashville Number System (NNS) — from the command line **or** a polished browser GUI.
 
 ## Install
 
@@ -15,7 +15,16 @@ Convert between chord progressions and Nashville Number System (NNS) from the co
 pip install -e .
 ```
 
-## Usage
+## GUI (browser-based)
+
+```bash
+nns-gui
+```
+
+Starts a local server and opens the app automatically in your default browser.  
+No extra dependencies — uses only the Python standard library.
+
+## CLI Usage
 
 ```bash
 nns-convert "C - F - G"
