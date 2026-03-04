@@ -1,0 +1,3 @@
+[console_scripts]
+nns-convert = nashville_numbers.cli:main
+nns-gui = nashville_numbers.gui:main

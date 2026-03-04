@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 
 [project.scripts]
 nns-convert = "nashville_numbers.cli:main"
+nns-gui = "nashville_numbers.gui:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
