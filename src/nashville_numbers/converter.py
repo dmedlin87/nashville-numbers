@@ -177,10 +177,10 @@ def _convert_nns_to_chords(prog: str, tonic: str, mode: str) -> str:
             continue
 
         degree, suffix, ext_raw, bass = m.groups()
-        root = _degree_to_note(degree, t)
+        root = _degree_to_note(degree, tonic)
         chord = root + _suffix_to_chord_quality(suffix, degree, mode) + _normalize_extension_for_chord(ext_raw)
         if bass:
-            chord += f"/{_degree_to_note(bass, t)}"
+            chord += f"/{_degree_to_note(bass, tonic)}"
         out.append(token.text.replace(stripped, chord))
 
     return "".join(out) if out else prog
@@ -194,10 +194,22 @@ def _normalize_extension_for_chord(ext_raw: str) -> str:
     return f"({ext_raw})"
 
 
-def _degree_to_note(degree: str, tonic_semitone: int) -> str:
+def _degree_to_note(degree: str, tonic: str) -> str:
     steps = {"1": 0, "b2": 1, "2": 2, "b3": 3, "3": 4, "4": 5, "#4": 6, "5": 7, "b6": 8, "6": 9, "b7": 10, "7": 11}
+    tonic_semitone = NOTE_TO_SEMITONE.get(tonic, 0)
     semitone = (tonic_semitone + steps.get(degree, 0)) % 12
-    preferred = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+    
+    sharp_keys = {"G", "D", "A", "E", "B", "F#", "C#"}
+    flat_keys = {"F", "Bb", "Eb", "Ab", "Db", "Gb", "Cb"}
+    
+    if tonic in flat_keys:
+        preferred = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+    elif tonic in sharp_keys:
+        preferred = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    else:
+        # Default (C)
+        preferred = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+        
     return preferred[semitone]
 
 
