@@ -38,6 +38,18 @@ def test_tokenize_progression_separators():
         ProgressionToken("D", "chord"),
     ]
 
+def test_tokenize_progression_whitespace_separators():
+    tokens = tokenize_progression("1\t4\n5\r6")
+    assert tokens == [
+        ProgressionToken("1", "nns"),
+        ProgressionToken("\t", "separator"),
+        ProgressionToken("4", "nns"),
+        ProgressionToken("\n", "separator"),
+        ProgressionToken("5", "nns"),
+        ProgressionToken("\r", "separator"),
+        ProgressionToken("6", "nns"),
+    ]
+
 def test_tokenize_progression_other():
     tokens = tokenize_progression("C xyz 1")
     assert tokens == [
@@ -77,6 +89,48 @@ def test_parse_input_key_extraction():
     parsed = parse_input("in Bb major")
     assert parsed.key_tonic == "Bb"
     assert parsed.key_mode == "Major"
+
+    # key: G mixolydian
+    parsed = parse_input("key: G mixolydian")
+    assert parsed.key_tonic == "G"
+    assert parsed.key_mode == "Major"
+
+    # key: F dorian
+    parsed = parse_input("key: F dorian")
+    assert parsed.key_tonic == "F"
+    assert parsed.key_mode == "Major"
+
+    # key: E phrygian
+    parsed = parse_input("key: E phrygian")
+    assert parsed.key_tonic == "E"
+    assert parsed.key_mode == "Major"
+
+    # key: C lydian
+    parsed = parse_input("key: C lydian")
+    assert parsed.key_tonic == "C"
+    assert parsed.key_mode == "Major"
+
+    # key: B locrian
+    parsed = parse_input("key: B locrian")
+    assert parsed.key_tonic == "B"
+    assert parsed.key_mode == "Major"
+
+    # key: C ionian
+    parsed = parse_input("key: C ionian")
+    assert parsed.key_tonic == "C"
+    assert parsed.key_mode == "Major"
+
+    # key: A mode
+    parsed = parse_input("key: A mode")
+    assert parsed.key_tonic == "A"
+    assert parsed.key_mode == "Major"
+
+def test_parse_input_with_semicolon():
+    # in C; 1 4 5
+    parsed = parse_input("in C; 1 4 5")
+    assert parsed.key_tonic == "C"
+    assert parsed.key_mode is None
+    assert parsed.mode == "nns_to_chords"
 
 def test_parse_input_mode_detection():
     # nns_to_chords (nns_hits > chord_hits)
