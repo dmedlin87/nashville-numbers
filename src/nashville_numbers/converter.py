@@ -10,6 +10,9 @@ from .parser import parse_input, tokenize_progression
 
 SEMITONE_TO_DEGREE = {0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4", 6: "#4", 7: "5", 8: "b6", 9: "6", 10: "b7", 11: "7"}
 
+DEGREE_TO_STEP = {"1": 0, "b2": 1, "2": 2, "b3": 3, "3": 4, "4": 5, "#4": 6, "5": 7, "b6": 8, "6": 9, "b7": 10, "7": 11}
+PREFERRED_NOTES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+
 MAJOR_DIATONIC = {"1": "", "2": "m", "3": "m", "4": "", "5": "", "6": "m", "7": "dim"}
 MINOR_DIATONIC = {"1": "m", "2": "dim", "b3": "", "4": "m", "5": "m", "b6": "", "b7": ""}
 
@@ -195,10 +198,8 @@ def _normalize_extension_for_chord(ext_raw: str) -> str:
 
 
 def _degree_to_note(degree: str, tonic_semitone: int) -> str:
-    steps = {"1": 0, "b2": 1, "2": 2, "b3": 3, "3": 4, "4": 5, "#4": 6, "5": 7, "b6": 8, "6": 9, "b7": 10, "7": 11}
-    semitone = (tonic_semitone + steps.get(degree, 0)) % 12
-    preferred = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
-    return preferred[semitone]
+    semitone = (tonic_semitone + DEGREE_TO_STEP.get(degree, 0)) % 12
+    return PREFERRED_NOTES[semitone]
 
 
 def _suffix_to_chord_quality(suffix: str, degree: str, mode: str) -> str:
