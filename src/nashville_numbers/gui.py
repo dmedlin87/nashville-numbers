@@ -431,6 +431,8 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .animate-in { animation: fadeIn 0.35s ease forwards; }
+  .animate-in-delay { animation: fadeIn 0.35s ease 0.05s both; }
+  .animate-in-delay2 { animation: fadeIn 0.35s ease 0.1s both; }
 
   /* ── Fretboard ──────────────────────────────────────────────────────────── */
   .fretboard-section {
@@ -485,7 +487,23 @@ _HTML = r"""<!DOCTYPE html>
 
   .fb-filter-group {
     display: flex;
-    gap: 0.6rem;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--surface2);
+    padding: 0.35rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .fb-filter-group-label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 0.25rem;
+    white-space: nowrap;
   }
 
   .fb-filter-chip {
@@ -594,10 +612,16 @@ _HTML = r"""<!DOCTYPE html>
   .interactive-token {
     cursor: pointer;
     border-bottom: 1px dashed transparent;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, background 0.2s;
+    border-radius: 3px;
   }
   .interactive-token:hover {
     border-bottom-color: currentColor;
+    background: rgba(124, 92, 252, 0.1);
+  }
+  .interactive-token:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
     background: rgba(124, 92, 252, 0.1);
   }
   .interactive-token.active-highlight {
@@ -605,11 +629,33 @@ _HTML = r"""<!DOCTYPE html>
     border-bottom: 2px solid var(--accent);
   }
 
+  /* ── Output blocks ──────────────────────────────────────────────────────── */
+  .output-block {
+    margin-bottom: 1rem;
+  }
+  .output-block:last-child {
+    margin-bottom: 0;
+  }
+
+  /* ── Fretboard preset chip ──────────────────────────────────────────────── */
+  .fb-filter-chip.preset {
+    margin-left: 0.75rem;
+    border-style: dashed;
+    color: var(--accent);
+  }
+
+  .fb-filter-chip.preset:hover {
+    background: rgba(124, 92, 252, 0.15);
+    border-color: var(--accent);
+  }
+
   /* ── Responsive ─────────────────────────────────────────────────────────── */
   @media (max-width: 520px) {
     .card { padding: 1.25rem; }
     .kbd-hint { display: none; }
     .examples-grid { grid-template-columns: 1fr 1fr; }
+    .fb-controls { gap: 0.6rem; }
+    .fb-filter-group { flex-wrap: wrap; }
   }
 </style>
 </head>
@@ -626,7 +672,7 @@ _HTML = r"""<!DOCTYPE html>
   </header>
 
   <!-- Main card -->
-  <div class="card animate-in" style="animation-delay:0.05s">
+  <div class="card animate-in-delay">
 
     <!-- Input -->
     <div class="section-label">Progression Input</div>
@@ -683,14 +729,15 @@ _HTML = r"""<!DOCTYPE html>
         </div>
 
         <div class="fb-filter-group" id="fbFilters">
-          <button class="fb-filter-chip active" data-degree="1" onclick="toggleDegree(1)">1</button>
-          <button class="fb-filter-chip active" data-degree="2" onclick="toggleDegree(2)">2</button>
-          <button class="fb-filter-chip active" data-degree="3" onclick="toggleDegree(3)">3</button>
-          <button class="fb-filter-chip active" data-degree="4" onclick="toggleDegree(4)">4</button>
-          <button class="fb-filter-chip active" data-degree="5" onclick="toggleDegree(5)">5</button>
-          <button class="fb-filter-chip active" data-degree="6" onclick="toggleDegree(6)">6</button>
-          <button class="fb-filter-chip active" data-degree="7" onclick="toggleDegree(7)">7</button>
-          <button class="fb-filter-chip" style="margin-left:0.5rem; border-style:dashed" onclick="applyPreset([1,3,6])">1-3-6</button>
+          <span class="fb-filter-group-label">Degrees</span>
+          <button class="fb-filter-chip active" data-degree="1" aria-label="Toggle degree 1" onclick="toggleDegree(1)">1</button>
+          <button class="fb-filter-chip active" data-degree="2" aria-label="Toggle degree 2" onclick="toggleDegree(2)">2</button>
+          <button class="fb-filter-chip active" data-degree="3" aria-label="Toggle degree 3" onclick="toggleDegree(3)">3</button>
+          <button class="fb-filter-chip active" data-degree="4" aria-label="Toggle degree 4" onclick="toggleDegree(4)">4</button>
+          <button class="fb-filter-chip active" data-degree="5" aria-label="Toggle degree 5" onclick="toggleDegree(5)">5</button>
+          <button class="fb-filter-chip active" data-degree="6" aria-label="Toggle degree 6" onclick="toggleDegree(6)">6</button>
+          <button class="fb-filter-chip active" data-degree="7" aria-label="Toggle degree 7" onclick="toggleDegree(7)">7</button>
+          <button class="fb-filter-chip preset" aria-label="Show degrees 1, 3, and 6 only" onclick="applyPreset([1,3,6])">1-3-6</button>
         </div>
       </div>
 
@@ -704,7 +751,7 @@ _HTML = r"""<!DOCTYPE html>
   </div><!-- /card -->
 
   <!-- Examples -->
-  <div class="examples-section animate-in" style="animation-delay:0.1s">
+  <div class="examples-section animate-in-delay2">
     <div class="examples-header">Try an example</div>
     <div class="examples-grid" id="examplesGrid"></div>
   </div>
@@ -856,6 +903,8 @@ function doClear() {
   const box = document.getElementById('outputBox');
   box.className = 'output-box';
   box.innerHTML = '<span class="output-placeholder">Result will appear here&hellip;</span>';
+  document.getElementById('fbSection').classList.remove('active');
+  selectedChord = null;
   document.getElementById('inputArea').focus();
 }
 
@@ -948,7 +997,7 @@ function updateFretboard() {
         const dot = document.createElement('div');
         const isSelectedTonic = isTonic || (viewMode === 'chord' && selectedChord && selectedChord.type === 'nns' && degreeInfo.degree === parseInt(selectedChord.text.match(/[1-7]/)[0]));
         dot.className = `fb-note-dot degree-${degreeInfo.degree} ${isSelectedTonic ? 'tonic' : ''}`;
-        dot.style.left = (fret === 0 ? 0 : (fret - 0.5) * (100 / numFrets)) + '%';
+        dot.style.left = ((fret === 0 ? 0.5 : fret - 0.5) * (100 / numFrets)) + '%';
         dot.style.top = ((stringIdx + 0.5) * (100 / tuning.length)) + '%';
         dot.textContent = label;
         container.appendChild(dot);
