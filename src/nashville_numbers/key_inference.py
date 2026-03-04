@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 from dataclasses import dataclass
 
@@ -67,6 +68,10 @@ def infer_keys(prog: str, max_keys: int = 3) -> list[KeyChoice]:
     return [item.choice for item in best]
 
 
+# Cache expensive string tokenization and key scoring during section splits.
+# infer_sections iteratively splits progression strings and repeatedly re-scores
+# the same sub-strings, making this a prime candidate for memoization.
+@functools.lru_cache(maxsize=1024)
 def rank_keys(prog: str) -> list[ScoredKey]:
     chords = _extract_chords(prog)
     if not chords:
