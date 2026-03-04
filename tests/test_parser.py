@@ -107,3 +107,42 @@ def test_parse_input_empty():
     assert parsed.key_tonic is None
     assert parsed.key_mode is None
     assert parsed.mode == "chords_to_nns"
+
+def test_parse_input_modes():
+    # Minor modes
+    for mode_str in ["minor", "aeolian", "Aeolian"]:
+        parsed = parse_input(f"in C {mode_str}")
+        assert parsed.key_mode == "Minor", f"Failed for {mode_str}"
+
+    # Major modes
+    for mode_str in ["major", "mode", "ionian", "dorian", "mixolydian", "lydian", "phrygian", "locrian"]:
+        parsed = parse_input(f"in C {mode_str}")
+        assert parsed.key_mode == "Major", f"Failed for {mode_str}"
+
+    # Shorthand minor
+    parsed = parse_input("in Cm")
+    assert parsed.key_mode == "Minor"
+    assert parsed.key_tonic == "C"
+
+def test_parse_input_semicolon_newline():
+    # Semicolon usage
+    parsed = parse_input("key: G; 1 4 5")
+    assert parsed.key_tonic == "G"
+    assert parsed.mode == "nns_to_chords"
+
+    # Newline usage
+    parsed = parse_input("1 4 5\nin C")
+    assert parsed.key_tonic == "C"
+    assert parsed.mode == "nns_to_chords"
+
+    # Text preservation
+    assert parsed.text == "1 4 5\nin C"
+
+def test_parse_input_tie_without_tonic():
+    # 1 nns hit, 1 chord hit, no tonic
+    parsed = parse_input("1 C")
+    assert parsed.mode == "chords_to_nns"
+
+    # tie with tonic
+    parsed = parse_input("1 C in G")
+    assert parsed.mode == "nns_to_chords"
