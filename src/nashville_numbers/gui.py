@@ -15,6 +15,8 @@ from urllib.parse import urlparse
 
 from .converter import convert
 
+MAX_INPUT_LENGTH = 1_000_000  # 1MB
+
 # ---------------------------------------------------------------------------
 # HTML template – embedded so the GUI is a single self-contained module.
 # ---------------------------------------------------------------------------
@@ -632,9 +634,15 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         length = int(self.headers.get("Content-Length", 0))
+        if length > MAX_INPUT_LENGTH:
+            self._send_json({"error": "Payload too large"}, status=413)
+            return
         body = self.rfile.read(length)
         try:
             payload = json.loads(body)
+            if not isinstance(payload, dict):
+                self._send_json({"error": "Expected JSON object"}, status=400)
+                return
         except json.JSONDecodeError:
             self._send_json({"error": "Invalid JSON in request body"}, status=400)
             return
