@@ -615,7 +615,7 @@ window.addEventListener('load', () => document.getElementById('inputArea').focus
 class _Handler(BaseHTTPRequestHandler):
     """Minimal request handler serving the single-page app and a JSON API."""
 
-    def log_message(self, fmt: str, *args: object) -> None:  # silence access logs
+    def log_message(self, format: str, *args: object) -> None:  # silence access logs
         pass
 
     def do_GET(self) -> None:

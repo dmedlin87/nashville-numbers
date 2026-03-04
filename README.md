@@ -1,6 +1,12 @@
 # Nashville Numbers Converter
 
-Convert between chord progressions and Nashville Number System (NNS) — from the command line **or** a polished browser GUI.
+> **The fastest way to speak Music's secret language.**
+
+![Nashville Numbers Jukebox](content/nashville-numbers-jutebox.png)
+
+Talk to musicians the way musicians actually talk — in numbers. Throw in a chord progression, get back Nashville Numbers. Got a chart full of numbers and need real chords? Done. Works from the command line or a slick browser GUI, with zero setup beyond a single `pip install`.
+
+---
 
 ## Install
 
@@ -8,24 +14,25 @@ Convert between chord progressions and Nashville Number System (NNS) — from th
 pip install -e .
 ```
 
-## GUI (browser-based)
+---
+
+## GUI — point, click, play
 
 ```bash
 nns-gui
 ```
 
-Starts a local server and opens the app automatically in your default browser.  
-No extra dependencies — uses only the Python standard library.
+Spins up a local server and pops open your browser automatically. No Electron, no npm, no drama — pure Python standard library.
 
-## CLI Usage
+---
+
+## CLI — fast and no-nonsense
 
 ```bash
 nns-convert "C - F - G"
 ```
 
-### Supported input styles
-
-#### CHORDS → NNS
+### Chords → Nashville Numbers
 
 ```bash
 nns-convert "C - F - G"
@@ -33,7 +40,7 @@ nns-convert "| C | F G | Am |"
 nns-convert "Cmaj7#11/G, Dm7, G7"
 ```
 
-#### NNS → CHORDS (key required)
+### Nashville Numbers → Chords (key required)
 
 ```bash
 nns-convert "1 - 4 - 5 in G"
@@ -41,16 +48,15 @@ nns-convert "Key: Eb Major; 1 6 2 5"
 nns-convert "1m - b7 - 4m - 5(7) in A minor"
 ```
 
-If key is missing in NNS mode, output is exactly:
+Forget the key? You'll hear about it:
 
-```text
+```
 Key: REQUIRED
 ```
 
+---
 
-## Maintainer checks
-
-Run the CI-equivalent test command locally:
+## Running tests
 
 ```bash
 pytest -q
