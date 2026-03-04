@@ -378,13 +378,20 @@ _HTML = r"""<!DOCTYPE html>
     cursor: pointer;
     transition: border-color var(--transition), background var(--transition), transform var(--transition), box-shadow var(--transition);
     user-select: none;
+    text-align: left;
+    width: 100%;
+    font-family: inherit;
+    color: inherit;
+    display: block;
   }
 
-  .example-chip:hover {
+  .example-chip:hover,
+  .example-chip:focus-visible {
     border-color: var(--accent);
     background: rgba(124,92,252,0.09);
     transform: translateY(-1px);
     box-shadow: 0 4px 16px rgba(124,92,252,0.18);
+    outline: none;
   }
 
   .example-chip:active { transform: translateY(0); }
@@ -452,6 +459,7 @@ _HTML = r"""<!DOCTYPE html>
     <div class="section-label">Progression Input</div>
     <div class="input-wrap">
       <textarea
+        aria-label="Chord progression input"
         id="inputArea"
         placeholder="e.g.  C - F - G   or   1 - 4 - 5 in G   or   | C | F G | Am |"
         spellcheck="false"
@@ -467,14 +475,14 @@ _HTML = r"""<!DOCTYPE html>
         <span class="spinner"></span>
         Convert
       </button>
-      <button class="btn-clear" onclick="doClear()">Clear</button>
+      <button class="btn-clear" onclick="doClear()" aria-label="Clear input and result">Clear</button>
       <span class="kbd-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> to convert</span>
     </div>
 
     <!-- Output -->
     <div class="section-label">Result</div>
     <div class="output-wrap">
-      <div class="output-box" id="outputBox">
+      <div class="output-box" id="outputBox" aria-live="polite">
         <span class="output-placeholder">Result will appear here&hellip;</span>
       </div>
     </div>
@@ -506,8 +514,10 @@ const EXAMPLES = [
 // Build example chips
 const grid = document.getElementById('examplesGrid');
 EXAMPLES.forEach(ex => {
-  const chip = document.createElement('div');
+  const chip = document.createElement('button');
+  chip.type = 'button';
   chip.className = 'example-chip';
+  chip.setAttribute('aria-label', `Example: ${ex.label}, ${ex.text}`);
   chip.innerHTML = `<div class="chip-label">${ex.label}</div><div class="chip-text">${escapeHtml(ex.text)}</div>`;
   chip.addEventListener('click', () => {
     document.getElementById('inputArea').value = ex.text;
