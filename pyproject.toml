@@ -11,9 +11,10 @@ requires-python = ">=3.10"
 
 [project.scripts]
 nns-convert = "nashville_numbers.cli:main"
+nns-gui = "nashville_numbers.gui:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "pytest-cov>=7"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

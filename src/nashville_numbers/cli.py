@@ -6,6 +6,8 @@ import sys
 
 from .converter import convert
 
+MAX_INPUT_LENGTH = 1_000_000  # 1MB
+
 
 def main() -> None:
     if len(sys.argv) > 1:
@@ -25,7 +27,7 @@ def main() -> None:
             print("Usage: nns-convert [PROGRESSION]", file=sys.stderr)
             print("Run 'nns-convert --help' for more information.", file=sys.stderr)
             sys.exit(1)
-        input_text = sys.stdin.read().strip()
+        input_text = sys.stdin.read(MAX_INPUT_LENGTH).strip()
     print(convert(input_text))
 
 
