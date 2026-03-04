@@ -680,22 +680,57 @@ def _find_free_port(start: int = 8765) -> int:
     raise OSError(f"Unable to find an available port after 100 attempts (starting from {start})")
 
 
+def _start_server(server: HTTPServer) -> None:
+    try:
+        server.serve_forever()
+    except Exception:
+        pass
+
+
 def main() -> None:
     port = _find_free_port()
     server = HTTPServer(("127.0.0.1", port), _Handler)
     url = f"http://127.0.0.1:{port}"
-    print(f"Nashville Numbers GUI → {url}")
-    print("Press Ctrl-C to stop.")
+    print(f"Nashville Numbers GUI serving at {url}")
 
-    # Open browser after a short delay so the server is ready
-    threading.Timer(0.3, lambda: webbrowser.open(url)).start()
+    # Run the HTTP server in a background thread
+    server_thread = threading.Thread(target=_start_server, args=(server,), daemon=True)
+    server_thread.start()
 
     try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nStopped.")
+        import webview
+
+        # Open as a native desktop application window
+        webview.create_window(
+            "Nashville Numbers",
+            url,
+            width=800,
+            height=700,
+            min_size=(400, 500)
+        )
+        webview.start()
+
+    except (ImportError, Exception) as e:
+        if isinstance(e, ImportError):
+            print("pywebview not installed. Falling back to default browser.")
+        else:
+            print(f"Failed to start native window: {e}. Falling back to default browser.")
+        print("Press Ctrl-C to stop.")
+
+        # Open browser after a short delay so the server is ready
+        threading.Timer(0.3, lambda: webbrowser.open(url)).start()
+
+        try:
+            # Block the main thread to keep the daemon server thread alive
+            while True:
+                threading.Event().wait(3600)
+        except KeyboardInterrupt:
+            print("\nStopped.")
+
     finally:
+        server.shutdown()
         server.server_close()
+        server_thread.join(timeout=1.0)
 
 
 if __name__ == "__main__":

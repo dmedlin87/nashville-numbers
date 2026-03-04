@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "Chord progression and Nashville Number System converter"
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+    "pywebview>=4.0",
+]
 
 [project.scripts]
 nns-convert = "nashville_numbers.cli:main"
