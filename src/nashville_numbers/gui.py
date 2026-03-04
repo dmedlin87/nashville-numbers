@@ -11,7 +11,7 @@ import socket
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 from .converter import convert
 
