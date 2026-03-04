@@ -97,72 +97,74 @@ def _parse_chord_quality(_root: str, quality_raw: str, degree: str, mode: str) -
     compact = raw.replace(" ", "")
     lower = compact.lower()
 
-    suffix = ""
-    extension = ""
+    suffix, extension, lower = _extract_base_quality(compact, lower)
+    extension, lower = _extract_major_extension(compact, lower, extension)
+    extension = _extract_other_extensions(compact, lower, extension)
+    suffix = _apply_diatonic_defaults(suffix, degree, mode, quality_raw, lower)
 
+    return suffix, extension
+
+
+def _extract_base_quality(compact: str, lower: str) -> tuple[str, str, str]:
     if "ø" in compact or "m7b5" in lower:
-        suffix = "m"
-        extension = "7b5"
-        lower = lower.replace("ø", "").replace("m7b5", "")
-    elif "dim" in lower or "°" in compact:
-        suffix = "dim"
-        lower = lower.replace("dim", "").replace("°", "")
-    elif "aug" in lower or "+" in compact:
-        suffix = "aug"
-        lower = lower.replace("aug", "").replace("+", "")
-    elif "sus2" in lower:
-        suffix = "sus2"
-        lower = lower.replace("sus2", "")
-    elif "sus4" in lower or "sus" in lower:
-        suffix = "sus4"
-        lower = lower.replace("sus4", "").replace("sus", "")
-    elif lower.startswith("mmaj"):
-        suffix = "m"
-        extension = "maj7"
-        lower = lower[5:]
-    elif lower.startswith("min"):
-        suffix = "m"
-        lower = lower[3:]
-    elif lower.startswith("m") and not lower.startswith("maj"):
-        suffix = "m"
-        lower = lower[1:]
+        return "m", "7b5", lower.replace("ø", "").replace("m7b5", "")
+    if "dim" in lower or "°" in compact:
+        return "dim", "", lower.replace("dim", "").replace("°", "")
+    if "aug" in lower or "+" in compact:
+        return "aug", "", lower.replace("aug", "").replace("+", "")
+    if "sus2" in lower:
+        return "sus2", "", lower.replace("sus2", "")
+    if "sus4" in lower or "sus" in lower:
+        return "sus4", "", lower.replace("sus4", "").replace("sus", "")
+    if lower.startswith("mmaj"):
+        return "m", "maj7", lower[5:]
+    if lower.startswith("min"):
+        return "m", "", lower[3:]
+    if lower.startswith("m") and not lower.startswith("maj"):
+        return "m", "", lower[1:]
+    return "", "", lower
 
+
+def _extract_major_extension(compact: str, lower: str, extension: str) -> tuple[str, str]:
     if lower.startswith("maj7") or compact.startswith("M7"):
-        extension = extension or "maj7"
-        lower = lower.replace("maj7", "", 1)
-    elif lower.startswith("maj") or compact.startswith("M"):
-        lower = lower[3:] if lower.startswith("maj") else lower
+        return extension or "maj7", lower.replace("maj7", "", 1)
+    if lower.startswith("maj") or compact.startswith("M"):
+        return extension, lower[3:] if lower.startswith("maj") else lower
+    return extension, lower
 
+
+def _extract_other_extensions(compact: str, lower: str, extension: str) -> str:
     paren = re.search(r"\(([^)]*)\)", compact)
     if paren:
         ext_val = paren.group(1).strip()
         if ext_val:
-            extension = ext_val
+            return ext_val
     else:
-        ext_tokens = EXT_TOKENS_RE.findall(lower)
-        merged = "".join(ext_tokens)
+        merged = "".join(EXT_TOKENS_RE.findall(lower))
         if extension and merged and merged not in extension:
-            extension = extension + merged
-        elif merged and not extension:
-            extension = merged
+            return extension + merged
+        if merged and not extension:
+            return merged
+    return extension
 
+
+def _apply_diatonic_defaults(suffix: str, degree: str, mode: str, quality_raw: str, lower: str) -> str:
     if not suffix:
         defaults = MINOR_DIATONIC if mode == "Minor" else MAJOR_DIATONIC
         suffix = defaults.get(degree, "")
 
     if mode == "Minor" and degree == "5":
-        if quality_raw.strip() == "":
-            suffix = ""
-        elif any(token in lower for token in ("7", "9", "11", "13", "alt")):
-            suffix = ""
-        elif quality_raw.strip() and not lower.startswith("m") and not lower.startswith("min"):
-            suffix = ""
+        if not quality_raw.strip():
+            return ""
+        if any(token in lower for token in ("7", "9", "11", "13", "alt")):
+            return ""
+        if quality_raw.strip() and not lower.startswith("m") and not lower.startswith("min"):
+            return ""
 
-    return suffix, extension
+    return suffix
 
 
 def _convert_nns_to_chords(prog: str, tonic: str, mode: str) -> str:
-    t = NOTE_TO_SEMITONE.get(tonic, 0)
     out: list[str] = []
 
     for token in tokenize_progression(prog):

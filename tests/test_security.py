@@ -1,4 +1,3 @@
-import re
 import time
 import pytest
 from nashville_numbers.parser import NNS_TOKEN_RE, CHORD_TOKEN_RE
