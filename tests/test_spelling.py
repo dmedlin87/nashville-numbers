@@ -11,4 +11,4 @@ def test_spelling_f_sharp_major() -> None:
     # Current code returns preferred[(6+11)%12] = preferred[5] = "F".
     # While F is enharmonically E#, it's usually better to be consistent.
     # But let's start with Db.
-    assert convert("1 4 5 in Db") == "Key: Db Major\nDb - Gb - Ab"
+    assert convert("1 4 5 in Db") == "Key: Db Major\nDb Gb Ab"

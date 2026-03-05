@@ -30,19 +30,35 @@ def test_relative_major():
     assert _relative_major("G") == "Bb"
 
 def test_extract_chords():
-    assert _extract_chords("C - F - G") == [("C", ""), ("F", ""), ("G", "")]
-    assert _extract_chords("Am Dm E7") == [("A", "m"), ("D", "m"), ("E", "7")]
-    assert _extract_chords("Cmaj7/G") == [("C", "maj7")]
+    assert _extract_chords("C - F - G") == [
+        ("C", "", False, False, False),
+        ("F", "", False, False, False),
+        ("G", "", False, False, False),
+    ]
+    assert _extract_chords("Am Dm E7") == [
+        ("A", "m", True, False, False),
+        ("D", "m", True, False, False),
+        ("E", "7", False, False, True),
+    ]
+    assert _extract_chords("Cmaj7/G") == [("C", "maj7", False, False, False)]
     assert _extract_chords("not a chord") == []
     assert _extract_chords("1 4 5") == []  # NNS tokens are ignored
 
 def test_score_key():
-    chords_c_maj = [("C", ""), ("F", ""), ("G", "")]
+    chords_c_maj = [
+        ("C", "", False, False, False),
+        ("F", "", False, False, False),
+        ("G", "", False, False, False),
+    ]
     score_c_maj = _score_key(chords_c_maj, "C", "Major")
     score_g_maj = _score_key(chords_c_maj, "G", "Major")
     assert score_c_maj > score_g_maj
 
-    chords_a_min = [("A", "m"), ("D", "m"), ("E", "7")]
+    chords_a_min = [
+        ("A", "m", True, False, False),
+        ("D", "m", True, False, False),
+        ("E", "7", False, False, True),
+    ]
     score_a_min = _score_key(chords_a_min, "A", "Minor")
     score_e_min = _score_key(chords_a_min, "E", "Minor")
     assert score_a_min > score_e_min

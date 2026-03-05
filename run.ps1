@@ -84,7 +84,7 @@ function Find-Python {
 }
 
 # ── setup venv & deps ────────────────────────────────────────────────────────
-function Ensure-Environment {
+function Initialize-Environment {
     # 1. Create venv if missing
     if (-not (Test-Path $VenvPython)) {
         Write-Step "Virtual environment not found - creating..."
@@ -150,13 +150,13 @@ switch ($Command.ToLower()) {
         exit 0
     }
     "gui" {
-        Ensure-Environment
+        Initialize-Environment
         Write-Ok "Launching GUI..."
         & $VenvPython -m nashville_numbers.gui
         exit $LASTEXITCODE
     }
     "convert" {
-        Ensure-Environment
+        Initialize-Environment
         if ($Rest.Count -eq 0) {
             Fail "No input provided. Example: .\run.ps1 convert `"C - F - G`""
         }
@@ -164,7 +164,7 @@ switch ($Command.ToLower()) {
         exit $LASTEXITCODE
     }
     "test" {
-        Ensure-Environment
+        Initialize-Environment
         Write-Ok "Running tests..."
         & $VenvPython -m pytest @Rest
         exit $LASTEXITCODE
