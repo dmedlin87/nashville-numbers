@@ -67,7 +67,11 @@ class DefaultPackInstaller:
 
         try:
             with zipfile.ZipFile(archive_path, "r") as zip_file:
-                zip_file.extractall(self.pack_root)
+                for member in zip_file.infolist():
+                    target_path = Path(self.pack_root) / member.filename
+                    if not target_path.resolve().is_relative_to(self.pack_root.resolve()):
+                        raise AudioInstallError("invalid_pack", f"Zip slip detected in archive: {member.filename}")
+                    zip_file.extract(member, self.pack_root)
         except zipfile.BadZipFile as exc:
             raise AudioInstallError("invalid_pack", "Downloaded pack archive is invalid") from exc
         finally:
