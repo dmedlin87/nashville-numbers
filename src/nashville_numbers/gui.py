@@ -702,6 +702,371 @@ _HTML = r"""<!DOCTYPE html>
     .fb-controls { gap: 0.6rem; }
     .fb-filter-group { flex-wrap: wrap; }
   }
+
+  /* ── Input Tabs ──────────────────────────────────────────────────────────── */
+  .input-tabs {
+    display: flex;
+    gap: 0.2rem;
+    margin-bottom: 1rem;
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 0.2rem;
+    border: 1px solid var(--border);
+  }
+
+  .tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.45rem 1rem;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+  }
+
+  .tab-btn.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(124,92,252,0.35);
+  }
+
+  /* ── Builder mode toggle ─────────────────────────────────────────────────── */
+  .mode-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .mode-toggle {
+    display: flex;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .mode-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 0.45rem 0.9rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+    font-family: inherit;
+  }
+
+  .mode-btn.active { background: rgba(124,92,252,0.3); color: var(--text); }
+
+  .key-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .key-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .key-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.3rem 0.45rem;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* ── Progression track ───────────────────────────────────────────────────── */
+  .progression-track {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+    min-height: 46px;
+    background: var(--surface2);
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 0.5rem 0.7rem;
+    margin-bottom: 0.6rem;
+    transition: border-color var(--transition);
+  }
+
+  .progression-track.has-items {
+    border-style: solid;
+    border-color: rgba(124,92,252,0.5);
+  }
+
+  .progression-empty {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-style: italic;
+    opacity: 0.55;
+    user-select: none;
+  }
+
+  .prog-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: var(--accent2);
+    color: #fff;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    font-weight: 700;
+    padding: 0.22rem 0.4rem 0.22rem 0.55rem;
+    animation: popIn 0.18s cubic-bezier(0.175,0.885,0.32,1.275) forwards;
+  }
+
+  .prog-chip.separator {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-weight: 400;
+    font-size: 0.8rem;
+    padding: 0.15rem 0.3rem 0.15rem 0.4rem;
+  }
+
+  .prog-chip-del {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+    font-size: 0.72rem;
+    line-height: 1;
+    padding: 0 0.05rem;
+    transition: color var(--transition);
+    font-family: inherit;
+  }
+
+  .prog-chip-del:hover { color: #fff; }
+  .prog-chip.separator .prog-chip-del { color: rgba(200,200,200,0.35); }
+  .prog-chip.separator .prog-chip-del:hover { color: var(--text-muted); }
+
+  @keyframes popIn {
+    from { transform: scale(0.7); opacity: 0; }
+    to   { transform: scale(1);   opacity: 1; }
+  }
+
+  /* ── Track actions ───────────────────────────────────────────────────────── */
+  .track-actions {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 0.85rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .sep-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.88rem;
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+
+  .sep-btn:hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: rgba(124,92,252,0.08);
+  }
+
+  .track-spacer { flex: 1; }
+
+  .btn-undo {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+  }
+
+  .btn-undo:hover { border-color: rgba(248,113,113,0.5); color: var(--error); }
+
+  /* ── Palette labels ──────────────────────────────────────────────────────── */
+  .palette-label {
+    font-size: 0.64rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+  }
+
+  /* ── Note palette ────────────────────────────────────────────────────────── */
+  .note-palette {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.85rem;
+  }
+
+  .note-btn {
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    font-weight: 700;
+    padding: 0.5rem 0.6rem;
+    cursor: pointer;
+    min-width: 40px;
+    text-align: center;
+    transition: all var(--transition);
+  }
+
+  .note-btn:hover {
+    border-color: var(--accent);
+    background: rgba(124,92,252,0.15);
+    transform: translateY(-1px);
+  }
+
+  .note-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(124,92,252,0.45);
+    transform: translateY(-1px);
+  }
+
+  .note-btn.accidental { color: var(--text-muted); font-size: 0.8rem; min-width: 36px; }
+  .note-btn.accidental.active { color: #fff; }
+
+  /* ── Number palette (NNS mode) ───────────────────────────────────────────── */
+  .number-palette {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.85rem;
+    align-items: flex-end;
+  }
+
+  .acc-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    align-items: center;
+    margin-right: 0.15rem;
+  }
+
+  .acc-col-label {
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.1rem;
+    opacity: 0.6;
+  }
+
+  .num-btn {
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 1.15rem;
+    font-weight: 800;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-align: center;
+    min-width: 46px;
+  }
+
+  .num-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(124,92,252,0.45);
+  }
+
+  .num-btn:hover:not(.active) {
+    border-color: var(--accent);
+    background: rgba(124,92,252,0.15);
+  }
+
+  .acc-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.22rem 0.4rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+    font-family: inherit;
+  }
+
+  .acc-btn.selected {
+    background: rgba(124,92,252,0.25);
+    border-color: var(--accent);
+    color: var(--text);
+  }
+
+  /* ── Quality palette ─────────────────────────────────────────────────────── */
+  .quality-palette {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
+
+  .quality-btn {
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.38rem 0.6rem;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+
+  .quality-btn:hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: rgba(124,92,252,0.1);
+  }
+
+  .quality-btn.active {
+    background: rgba(124,92,252,0.3);
+    border-color: var(--accent);
+    color: var(--text);
+  }
 </style>
 </head>
 <body>
@@ -721,18 +1086,82 @@ _HTML = r"""<!DOCTYPE html>
   <!-- Main card -->
   <div class="card animate-in-delay">
 
-    <!-- Input -->
-    <label for="inputArea" class="section-label">Progression Input</label>
-    <div class="input-wrap">
-      <textarea
-        aria-label="Chord progression input"
-        id="inputArea"
-        placeholder="e.g.  C - F - G   or   1 - 4 - 5 in G   or   | C | F G | Am |"
-        spellcheck="false"
-        autocomplete="off"
-        autocorrect="off"
-      ></textarea>
+    <!-- Input tabs -->
+    <div class="input-tabs" role="tablist" aria-label="Input method">
+      <button class="tab-btn active" id="tabBuilder" role="tab" aria-selected="true" aria-controls="panelBuilder" onclick="switchInputTab('builder')">Builder</button>
+      <button class="tab-btn" id="tabText" role="tab" aria-selected="false" aria-controls="panelText" onclick="switchInputTab('text')">Text</button>
     </div>
+
+    <!-- Builder panel -->
+    <div id="panelBuilder" role="tabpanel" aria-labelledby="tabBuilder">
+
+      <!-- Mode row -->
+      <div class="mode-row">
+        <div class="mode-toggle" role="group" aria-label="Conversion direction">
+          <button class="mode-btn active" id="modeChordsBtn" onclick="setBuilderMode('chords')">Chords &rarr; NNS</button>
+          <button class="mode-btn" id="modeNnsBtn" onclick="setBuilderMode('nns')">NNS &rarr; Chords</button>
+        </div>
+        <div class="key-row" id="keyRow" style="display:none" aria-label="Key selection">
+          <span class="key-label">Key</span>
+          <select id="keyNote" class="key-select" aria-label="Key note">
+            <option>C</option><option>C#</option><option>Db</option><option>D</option>
+            <option>Eb</option><option>E</option><option>F</option><option>F#</option>
+            <option>Gb</option><option>G</option><option>Ab</option><option>A</option>
+            <option>Bb</option><option>B</option>
+          </select>
+          <select id="keyQuality" class="key-select" aria-label="Key quality">
+            <option>Major</option><option>Minor</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Progression track -->
+      <div class="section-label" style="margin-bottom:0.4rem">Progression</div>
+      <div class="progression-track" id="progressionTrack" aria-label="Built progression" aria-live="polite">
+        <span class="progression-empty" id="progEmpty">Pick a note below to start&hellip;</span>
+      </div>
+
+      <!-- Track actions -->
+      <div class="track-actions">
+        <button class="sep-btn" onclick="addBuilderSep(' - ')" title="Add dash separator" aria-label="Add dash separator">&ndash;</button>
+        <button class="sep-btn" onclick="addBuilderSep(' | ')" title="Add bar line" aria-label="Add bar line"> | </button>
+        <button class="sep-btn" onclick="addBuilderSep(', ')" title="Add comma" aria-label="Add comma">,</button>
+        <div class="track-spacer"></div>
+        <button class="btn-undo" onclick="builderUndo()" aria-label="Remove last item">&#8617; Undo</button>
+        <button class="btn-undo" onclick="builderClear()" aria-label="Clear progression">&times; Clear</button>
+      </div>
+
+      <!-- Chord builder (chords → NNS mode) -->
+      <div id="chordBuilder">
+        <div class="palette-label">Root Note</div>
+        <div class="note-palette" id="notePalette" role="group" aria-label="Root note selection"></div>
+        <div class="palette-label">Quality</div>
+        <div class="quality-palette" id="qualityPalette" role="group" aria-label="Chord quality selection"></div>
+      </div>
+
+      <!-- NNS builder (NNS → chords mode) -->
+      <div id="nnsBuilder" style="display:none">
+        <div class="palette-label">Scale Degree</div>
+        <div class="number-palette" id="numberPalette" role="group" aria-label="Scale degree selection"></div>
+        <div class="palette-label">Quality</div>
+        <div class="quality-palette" id="nnsQualityPalette" role="group" aria-label="NNS chord quality selection"></div>
+      </div>
+
+    </div><!-- /panelBuilder -->
+
+    <!-- Text panel -->
+    <div id="panelText" role="tabpanel" aria-labelledby="tabText" style="display:none">
+      <div class="input-wrap">
+        <textarea
+          aria-label="Chord progression input"
+          id="inputArea"
+          placeholder="e.g.  C - F - G   or   1 - 4 - 5 in G   or   | C | F G | Am |"
+          spellcheck="false"
+          autocomplete="off"
+          autocorrect="off"
+        ></textarea>
+      </div>
+    </div><!-- /panelText -->
 
     <!-- Controls -->
     <div class="controls">
@@ -830,6 +1259,7 @@ EXAMPLES.forEach(ex => {
   chip.setAttribute('aria-label', `Example: ${ex.label}, ${ex.text}`);
   chip.innerHTML = `<div class="chip-label">${ex.label}</div><div class="chip-text">${escapeHtml(ex.text)}</div>`;
   chip.addEventListener('click', () => {
+    switchInputTab('text');
     document.getElementById('inputArea').value = ex.text;
     doConvert();
   });
@@ -841,7 +1271,10 @@ function escapeHtml(s) {
 }
 
 function doConvert() {
-  const input = document.getElementById('inputArea').value.trim();
+  const builderPanel = document.getElementById('panelBuilder');
+  const input = (builderPanel && builderPanel.style.display !== 'none')
+    ? buildProgressionString()
+    : document.getElementById('inputArea').value.trim();
   if (!input) return;
 
   const btn = document.getElementById('convertBtn');
@@ -948,13 +1381,269 @@ function copyResult(btn) {
 }
 
 function doClear() {
-  document.getElementById('inputArea').value = '';
+  builderClear();
+  resetStage();
+  const inputArea = document.getElementById('inputArea');
+  if (inputArea) inputArea.value = '';
   const box = document.getElementById('outputBox');
   box.className = 'output-box';
   box.innerHTML = '<span class="output-placeholder">Result will appear here&hellip;</span>';
   document.getElementById('fbSection').classList.remove('active');
   selectedChord = null;
-  document.getElementById('inputArea').focus();
+}
+
+// ── Builder Logic ───────────────────────────────────────────────────────────
+
+let builderMode = 'chords';  // 'chords' | 'nns'
+let builderTokens = [];      // { type: 'chord'|'sep', text: string }
+let stagedNote = '';         // e.g. "C" or "b3"
+let stagedQuality = '';      // e.g. "m7" or ""
+let nnsAccidental = '';      // '' | 'b' | '#'
+
+const BUILDER_NOTES = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+
+const CHORD_QUALITIES = [
+  { label: 'maj',   suffix: '' },
+  { label: 'm',     suffix: 'm' },
+  { label: '7',     suffix: '7' },
+  { label: 'm7',    suffix: 'm7' },
+  { label: 'maj7',  suffix: 'maj7' },
+  { label: 'mMaj7', suffix: 'mMaj7' },
+  { label: 'm7b5',  suffix: 'm7b5' },
+  { label: 'dim',   suffix: 'dim' },
+  { label: 'dim7',  suffix: 'dim7' },
+  { label: 'aug',   suffix: 'aug' },
+  { label: 'sus2',  suffix: 'sus2' },
+  { label: 'sus4',  suffix: 'sus4' },
+  { label: 'add9',  suffix: 'add9' },
+];
+
+const NNS_QUALITIES = [
+  { label: 'maj',  suffix: '' },
+  { label: 'm',    suffix: 'm' },
+  { label: '7',    suffix: '(7)' },
+  { label: 'm7',   suffix: 'm7' },
+  { label: 'maj7', suffix: 'maj7' },
+  { label: 'dim',  suffix: 'dim' },
+  { label: 'aug',  suffix: 'aug' },
+  { label: 'sus4', suffix: 'sus4' },
+];
+
+function initBuilder() {
+  // Note palette
+  const notePalette = document.getElementById('notePalette');
+  BUILDER_NOTES.forEach(note => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const isAcc = note.includes('#') || note.includes('b');
+    btn.className = 'note-btn' + (isAcc ? ' accidental' : '');
+    btn.dataset.note = note;
+    btn.textContent = note;
+    btn.addEventListener('click', () => selectNote(note, btn));
+    notePalette.appendChild(btn);
+  });
+
+  buildQualityPalette('qualityPalette', CHORD_QUALITIES, (suffix, btn) => {
+    document.querySelectorAll('#qualityPalette .quality-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    stagedQuality = suffix;
+    updateStageDisplay();
+  });
+
+  // Number palette with accidental selector
+  const numberPalette = document.getElementById('numberPalette');
+
+  const accCol = document.createElement('div');
+  accCol.className = 'acc-col';
+  const accColLabel = document.createElement('div');
+  accColLabel.className = 'acc-col-label';
+  accColLabel.textContent = 'Acc';
+  accCol.appendChild(accColLabel);
+
+  [['b', 'b'], ['', '\u266e'], ['#', '#']].forEach(([acc, label]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'acc-btn' + (acc === '' ? ' selected' : '');
+    btn.dataset.acc = acc;
+    btn.textContent = label;
+    btn.title = acc === '' ? 'Natural' : acc === 'b' ? 'Flat' : 'Sharp';
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.acc-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      nnsAccidental = acc;
+      if (stagedNote) {
+        const num = stagedNote.replace(/^[b#]/, '');
+        stagedNote = nnsAccidental + num;
+        updateStageDisplay();
+      }
+    });
+    accCol.appendChild(btn);
+  });
+  numberPalette.appendChild(accCol);
+
+  for (let n = 1; n <= 7; n++) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'num-btn';
+    btn.dataset.num = n;
+    btn.textContent = n;
+    btn.addEventListener('click', () => {
+      stagedNote = nnsAccidental + n;
+      commitStaged();
+    });
+    numberPalette.appendChild(btn);
+  }
+
+  buildQualityPalette('nnsQualityPalette', NNS_QUALITIES, (suffix, btn) => {
+    document.querySelectorAll('#nnsQualityPalette .quality-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    stagedQuality = suffix;
+    updateStageDisplay();
+  });
+}
+
+function buildQualityPalette(id, qualities, handler) {
+  const palette = document.getElementById(id);
+  qualities.forEach((q, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'quality-btn' + (i === 0 ? ' active' : '');
+    btn.dataset.suffix = q.suffix;
+    btn.textContent = q.label;
+    btn.addEventListener('click', () => handler(q.suffix, btn));
+    palette.appendChild(btn);
+  });
+}
+
+function switchInputTab(tab) {
+  const isBuilder = tab === 'builder';
+  document.getElementById('panelBuilder').style.display = isBuilder ? '' : 'none';
+  document.getElementById('panelText').style.display = isBuilder ? 'none' : '';
+  document.getElementById('tabBuilder').classList.toggle('active', isBuilder);
+  document.getElementById('tabBuilder').setAttribute('aria-selected', isBuilder);
+  document.getElementById('tabText').classList.toggle('active', !isBuilder);
+  document.getElementById('tabText').setAttribute('aria-selected', !isBuilder);
+  if (!isBuilder) document.getElementById('inputArea').focus();
+}
+
+function setBuilderMode(mode) {
+  builderMode = mode;
+  const isChords = mode === 'chords';
+  document.getElementById('modeChordsBtn').classList.toggle('active', isChords);
+  document.getElementById('modeNnsBtn').classList.toggle('active', !isChords);
+  document.getElementById('chordBuilder').style.display = isChords ? '' : 'none';
+  document.getElementById('nnsBuilder').style.display = isChords ? 'none' : '';
+  document.getElementById('keyRow').style.display = isChords ? 'none' : '';
+  resetStage();
+}
+
+function selectNote(note, btn) {
+  stagedNote = note;
+  commitStaged();
+}
+
+function updateStageDisplay() {
+  // Stage display removed; no-op kept for call-site compatibility.
+}
+
+function commitStaged() {
+  if (!stagedNote) return;
+  const chord = stagedNote + stagedQuality;
+  builderTokens.push({ type: 'chord', text: chord });
+  renderProgressionTrack();
+  resetStage();
+}
+
+function addBuilderSep(sep) {
+  if (builderTokens.length === 0) return;
+  const last = builderTokens[builderTokens.length - 1];
+  if (last.type === 'sep') return;
+  builderTokens.push({ type: 'sep', text: sep });
+  renderProgressionTrack();
+}
+
+function builderUndo() {
+  if (builderTokens.length === 0) return;
+  builderTokens.pop();
+  renderProgressionTrack();
+}
+
+function builderClear() {
+  builderTokens = [];
+  renderProgressionTrack();
+}
+
+function resetStage() {
+  stagedNote = '';
+  stagedQuality = '';
+  document.querySelectorAll('.note-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.num-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#qualityPalette .quality-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  document.querySelectorAll('#nnsQualityPalette .quality-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  updateStageDisplay();
+}
+
+function renderProgressionTrack() {
+  const track = document.getElementById('progressionTrack');
+  const empty = document.getElementById('progEmpty');
+
+  track.innerHTML = '';
+
+  if (builderTokens.length === 0) {
+    track.classList.remove('has-items');
+    empty.style.display = '';
+    track.appendChild(empty);
+    return;
+  }
+
+  track.classList.add('has-items');
+  empty.style.display = 'none';
+
+  builderTokens.forEach((token, idx) => {
+    const chip = document.createElement('span');
+    chip.className = 'prog-chip' + (token.type === 'sep' ? ' separator' : '');
+
+    const label = document.createElement('span');
+    label.textContent = token.text.trim() || token.text;
+    chip.appendChild(label);
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'prog-chip-del';
+    del.textContent = '\u00d7';
+    del.title = 'Remove';
+    del.setAttribute('aria-label', 'Remove ' + token.text.trim());
+    del.addEventListener('click', () => {
+      builderTokens.splice(idx, 1);
+      renderProgressionTrack();
+    });
+    chip.appendChild(del);
+
+    track.appendChild(chip);
+  });
+}
+
+function buildProgressionString() {
+  if (builderTokens.length === 0) return '';
+
+  let str = '';
+  for (let i = 0; i < builderTokens.length; i++) {
+    const tok = builderTokens[i];
+    const prev = i > 0 ? builderTokens[i - 1] : null;
+    if (tok.type === 'chord' && prev && prev.type === 'chord') {
+      str += ' ' + tok.text;
+    } else {
+      str += tok.text;
+    }
+  }
+
+  if (builderMode === 'nns') {
+    const keyNote = document.getElementById('keyNote').value;
+    const keyQuality = document.getElementById('keyQuality').value;
+    str += ' in ' + keyNote + ' ' + keyQuality.toLowerCase();
+  }
+
+  return str.trim();
 }
 
 // ── Fretboard Logic ────────────────────────────────────────────────────────
@@ -1048,7 +1737,7 @@ function updateFretboard() {
       } else if (viewMode === 'chord' && selectedChord) {
         const chordNotes = getChordNotes(selectedChord, currentKey);
         shouldShow = chordNotes.includes(noteVal);
-        isTonic = noteVal === getNoteValue(selectedChord.root);
+        isTonic = selectedChord.root != null ? noteVal === getNoteValue(selectedChord.root) : false;
       }
 
       if (shouldShow) {
@@ -1156,9 +1845,9 @@ window.addEventListener('resize', () => {
   resizeTimer = window.setTimeout(updateFretboard, 120);
 });
 
-// Auto-focus input
+// Init
 window.addEventListener('load', () => {
-  document.getElementById('inputArea').focus();
+  initBuilder();
 });
 </script>
 </body>
