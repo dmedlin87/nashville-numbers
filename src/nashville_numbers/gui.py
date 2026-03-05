@@ -47,6 +47,11 @@ _HTML = r"""<!DOCTYPE html>
     --font:        'Segoe UI', system-ui, -apple-system, sans-serif;
     --font-mono:   'Fira Code', 'Cascadia Code', 'Consolas', monospace;
     --transition:  0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    --content-max: 1700px;
+    --page-gutter: clamp(0.85rem, 2vw, 2rem);
+    --panel-gap:   clamp(1rem, 1.8vw, 1.5rem);
+    --card-pad:    clamp(1.25rem, 1.75vw, 2rem);
+    --fb-dot-size: clamp(18px, 1.15vw, 24px);
   }
 
   html, body {
@@ -73,19 +78,29 @@ _HTML = r"""<!DOCTYPE html>
   .page {
     position: relative;
     z-index: 1;
-    min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 2rem 1rem 4rem;
+    padding: clamp(1rem, 2.25vh, 2rem) var(--page-gutter) clamp(1.5rem, 4vh, 3rem);
     gap: 0;
+    width: 100%;
   }
 
   /* ── Header ─────────────────────────────────────────────────────────────── */
   header {
     text-align: center;
-    margin-bottom: 2.5rem;
+    margin-bottom: clamp(1.25rem, 3vh, 2.25rem);
     user-select: none;
+    width: min(var(--content-max), 100%);
+  }
+
+  .workspace {
+    width: min(var(--content-max), 100%);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--panel-gap);
+    align-items: start;
   }
 
   .logo-row {
@@ -123,9 +138,9 @@ _HTML = r"""<!DOCTYPE html>
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 2rem;
+    padding: var(--card-pad);
     width: 100%;
-    max-width: 720px;
+    max-width: none;
     box-shadow:
       0 0 0 1px rgba(124,92,252,0.08),
       0 8px 40px rgba(0,0,0,0.55),
@@ -353,7 +368,6 @@ _HTML = r"""<!DOCTYPE html>
   /* ── Examples ───────────────────────────────────────────────────────────── */
   .examples-section {
     width: 100%;
-    max-width: 720px;
     margin-top: 1.75rem;
   }
 
@@ -369,7 +383,7 @@ _HTML = r"""<!DOCTYPE html>
 
   .examples-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
     gap: 0.6rem;
   }
 
@@ -529,8 +543,11 @@ _HTML = r"""<!DOCTYPE html>
 
   .fretboard-outer {
     width: 100%;
-    overflow-x: auto;
-    padding-bottom: 1rem;
+    overflow-x: hidden;
+    padding: 0.35rem;
+    margin-top: 0.25rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(0,0,0,0.12));
+    border: 1px solid rgba(255,255,255,0.06);
     border-radius: 8px;
   }
 
@@ -540,7 +557,8 @@ _HTML = r"""<!DOCTYPE html>
     border: 4px solid #3a3a3a;
     border-radius: 6px;
     height: 160px;
-    min-width: 900px;
+    width: 100%;
+    min-width: 0;
     margin: 10px 0;
     display: flex;
     flex-direction: column;
@@ -574,8 +592,8 @@ _HTML = r"""<!DOCTYPE html>
 
   .fb-marker {
     position: absolute;
-    width: 14px;
-    height: 14px;
+    width: clamp(10px, 0.85vw, 14px);
+    height: clamp(10px, 0.85vw, 14px);
     background: rgba(255,255,255,0.1);
     border-radius: 50%;
     z-index: 0;
@@ -585,15 +603,15 @@ _HTML = r"""<!DOCTYPE html>
 
   .fb-note-dot {
     position: absolute;
-    width: 24px;
-    height: 24px;
+    width: var(--fb-dot-size);
+    height: var(--fb-dot-size);
     border-radius: 50%;
     z-index: 10;
     transform: translate(-50%, -50%);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.7rem;
+    font-size: clamp(0.58rem, 0.65vw, 0.72rem);
     font-weight: 800;
     color: #fff;
     box-shadow: 0 2px 5px rgba(0,0,0,0.4);
@@ -653,8 +671,32 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   /* ── Responsive ─────────────────────────────────────────────────────────── */
+  @media (min-width: 1200px) {
+    .workspace {
+      grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+    }
+
+    .examples-section {
+      margin-top: 0;
+      position: sticky;
+      top: 0.9rem;
+      max-height: calc(100dvh - 2.4rem);
+      overflow-y: auto;
+      padding-right: 0.25rem;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .page {
+      padding-top: 0.9rem;
+    }
+
+    .examples-section {
+      margin-top: 1.15rem;
+    }
+  }
+
   @media (max-width: 520px) {
-    .card { padding: 1.25rem; }
     .kbd-hint { display: none; }
     .examples-grid { grid-template-columns: 1fr 1fr; }
     .fb-controls { gap: 0.6rem; }
@@ -673,6 +715,8 @@ _HTML = r"""<!DOCTYPE html>
     </div>
     <p class="tagline">Chord progressions &harr; Nashville Number System</p>
   </header>
+
+  <div class="workspace">
 
   <!-- Main card -->
   <div class="card animate-in-delay">
@@ -758,6 +802,8 @@ _HTML = r"""<!DOCTYPE html>
     <div class="examples-header">Try an example</div>
     <div class="examples-grid" id="examplesGrid"></div>
   </div>
+
+  </div><!-- /workspace -->
 
   <footer>Nashville Numbers Converter &nbsp;·&nbsp; press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to convert</footer>
 
@@ -928,6 +974,7 @@ const TUNINGS = {
 let currentKey = { tonic: "C", mode: "Major" };
 let selectedChord = null;
 let visibleDegrees = new Set([1, 2, 3, 4, 5, 6, 7]);
+let resizeTimer = null;
 
 function getNoteValue(name) {
   const map = {
@@ -937,15 +984,23 @@ function getNoteValue(name) {
   return map[name.replace(/maj7|mmaj7|min|maj|dim|aug|sus2|sus4|m|7|6|9|11|13|add\d+|[#b]\d+/gi, "")] ?? 0;
 }
 
+function getStringSpacing() {
+  if (window.matchMedia('(min-width: 1700px)').matches) return 30;
+  if (window.matchMedia('(min-width: 1280px)').matches) return 28;
+  if (window.matchMedia('(min-width: 900px)').matches) return 26;
+  return 22;
+}
+
 function updateFretboard() {
   const container = document.getElementById('fretboard');
   const instrument = document.getElementById('instrumentSelect').value;
   const viewMode = document.getElementById('viewModeSelect').value;
   const tuning = TUNINGS[instrument];
   const numFrets = 15;
+  const stringSpacing = getStringSpacing();
 
   container.innerHTML = '';
-  container.style.height = (tuning.length * 28) + 'px';
+  container.style.height = (tuning.length * stringSpacing) + 'px';
 
   // Draw frets
   for (let i = 0; i <= numFrets; i++) {
@@ -1095,6 +1150,12 @@ document.addEventListener('keydown', e => {
   }
 });
 
+window.addEventListener('resize', () => {
+  if (!document.getElementById('fbSection').classList.contains('active')) return;
+  window.clearTimeout(resizeTimer);
+  resizeTimer = window.setTimeout(updateFretboard, 120);
+});
+
 // Auto-focus input
 window.addEventListener('load', () => {
   document.getElementById('inputArea').focus();
@@ -1207,9 +1268,9 @@ def main() -> None:
         webview.create_window(
             "Nashville Numbers",
             url,
-            width=800,
-            height=700,
-            min_size=(400, 500)
+            width=1440,
+            height=900,
+            min_size=(680, 540)
         )
         webview.start()
 
