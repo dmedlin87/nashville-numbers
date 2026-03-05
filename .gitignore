@@ -2,4 +2,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
-src/nashville_numbers.egg-info/
+
+# Python build artifacts
+*.egg-info/

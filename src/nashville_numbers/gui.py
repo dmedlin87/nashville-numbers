@@ -140,6 +140,7 @@ _HTML = r"""<!DOCTYPE html>
 
   /* ── Section labels ─────────────────────────────────────────────────────── */
   .section-label {
+    display: block;
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -675,7 +676,7 @@ _HTML = r"""<!DOCTYPE html>
   <div class="card animate-in-delay">
 
     <!-- Input -->
-    <div class="section-label">Progression Input</div>
+    <label for="inputArea" class="section-label">Progression Input</label>
     <div class="input-wrap">
       <textarea
         aria-label="Chord progression input"
@@ -699,7 +700,7 @@ _HTML = r"""<!DOCTYPE html>
     </div>
 
     <!-- Output -->
-    <div class="section-label">Result</div>
+    <h2 class="section-label">Result</h2>
     <div class="output-wrap">
       <div class="output-box" id="outputBox" aria-live="polite">
         <span class="output-placeholder">Result will appear here&hellip;</span>
