@@ -1,0 +1,3 @@
+## 2026-03-05 - Interactive tokens missing keyboard events
+**Learning:** Custom interactive elements (like spans) might have `:focus-visible` styles but still lack `tabindex`, `role`, and `onkeydown` events, making them completely inaccessible to keyboard users.
+**Action:** Always ensure any element that acts like a button (has `onclick`) also has `tabindex="0"`, `role="button"`, and an `onkeydown` handler for Enter/Space keys.
