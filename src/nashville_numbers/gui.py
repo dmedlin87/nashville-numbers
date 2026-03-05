@@ -379,13 +379,20 @@ _HTML = r"""<!DOCTYPE html>
     cursor: pointer;
     transition: border-color var(--transition), background var(--transition), transform var(--transition), box-shadow var(--transition);
     user-select: none;
+    text-align: left;
+    width: 100%;
+    font-family: inherit;
+    color: inherit;
+    display: block;
   }
 
-  .example-chip:hover {
+  .example-chip:hover,
+  .example-chip:focus-visible {
     border-color: var(--accent);
     background: rgba(124,92,252,0.09);
     transform: translateY(-1px);
     box-shadow: 0 4px 16px rgba(124,92,252,0.18);
+    outline: none;
   }
 
   .example-chip:active { transform: translateY(0); }
@@ -425,12 +432,231 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .animate-in { animation: fadeIn 0.35s ease forwards; }
+  .animate-in-delay { animation: fadeIn 0.35s ease 0.05s both; }
+  .animate-in-delay2 { animation: fadeIn 0.35s ease 0.1s both; }
+
+  /* ── Fretboard ──────────────────────────────────────────────────────────── */
+  .fretboard-section {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px dashed var(--border);
+    display: none;
+  }
+
+  .fretboard-section.active {
+    display: block;
+    animation: fadeIn 0.4s ease forwards;
+  }
+
+  .fb-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1.25rem;
+  }
+
+  .fb-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--surface2);
+    padding: 0.35rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  .fb-group label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .fb-select {
+    background: transparent;
+    color: var(--text);
+    border: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .fb-select option { background: var(--surface2); }
+
+  .fb-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--surface2);
+    padding: 0.35rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .fb-filter-group-label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 0.25rem;
+    white-space: nowrap;
+  }
+
+  .fb-filter-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+
+  .fb-filter-chip.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .fretboard-outer {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    border-radius: 8px;
+  }
+
+  .fretboard {
+    position: relative;
+    background: #1e1e1e;
+    border: 4px solid #3a3a3a;
+    border-radius: 6px;
+    height: 160px;
+    min-width: 900px;
+    margin: 10px 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+  }
+
+  .fb-string-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(to bottom, #eee 0%, #999 50%, #666 100%);
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .fb-fret-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(to right, #ccc 0%, #888 50%, #444 100%);
+    z-index: 2;
+  }
+
+  .fb-fret-line.nut {
+    width: 8px;
+    background: #e5e5e5;
+    left: 0;
+  }
+
+  .fb-marker {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 50%;
+    z-index: 0;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .fb-note-dot {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    z-index: 10;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #fff;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: default;
+  }
+
+  .fb-note-dot.tonic { background: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.5); }
+  .fb-note-dot.degree-1 { background: #ef4444; }
+  .fb-note-dot.degree-2 { background: #f97316; }
+  .fb-note-dot.degree-3 { background: #f59e0b; }
+  .fb-note-dot.degree-4 { background: #10b981; }
+  .fb-note-dot.degree-5 { background: #3b82f6; }
+  .fb-note-dot.degree-6 { background: #8b5cf6; }
+  .fb-note-dot.degree-7 { background: #ec4899; }
+
+  .fb-note-dot.dimmed { opacity: 0.2; transform: translate(-50%, -50%) scale(0.8); }
+
+  .interactive-token {
+    cursor: pointer;
+    border-bottom: 1px dashed transparent;
+    transition: border-color 0.2s, background 0.2s;
+    border-radius: 3px;
+  }
+  .interactive-token:hover {
+    border-bottom-color: currentColor;
+    background: rgba(124, 92, 252, 0.1);
+  }
+  .interactive-token:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    background: rgba(124, 92, 252, 0.1);
+  }
+  .interactive-token.active-highlight {
+    background: rgba(124, 92, 252, 0.25);
+    border-bottom: 2px solid var(--accent);
+  }
+
+  /* ── Output blocks ──────────────────────────────────────────────────────── */
+  .output-block {
+    margin-bottom: 1rem;
+  }
+  .output-block:last-child {
+    margin-bottom: 0;
+  }
+
+  /* ── Fretboard preset chip ──────────────────────────────────────────────── */
+  .fb-filter-chip.preset {
+    margin-left: 0.75rem;
+    border-style: dashed;
+    color: var(--accent);
+  }
+
+  .fb-filter-chip.preset:hover {
+    background: rgba(124, 92, 252, 0.15);
+    border-color: var(--accent);
+  }
 
   /* ── Responsive ─────────────────────────────────────────────────────────── */
   @media (max-width: 520px) {
     .card { padding: 1.25rem; }
     .kbd-hint { display: none; }
     .examples-grid { grid-template-columns: 1fr 1fr; }
+    .fb-controls { gap: 0.6rem; }
+    .fb-filter-group { flex-wrap: wrap; }
   }
 </style>
 </head>
@@ -447,12 +673,13 @@ _HTML = r"""<!DOCTYPE html>
   </header>
 
   <!-- Main card -->
-  <div class="card animate-in" style="animation-delay:0.05s">
+  <div class="card animate-in-delay">
 
     <!-- Input -->
     <label for="inputArea" class="section-label">Progression Input</label>
     <div class="input-wrap">
       <textarea
+        aria-label="Chord progression input"
         id="inputArea"
         placeholder="e.g.  C - F - G   or   1 - 4 - 5 in G   or   | C | F G | Am |"
         spellcheck="false"
@@ -468,7 +695,7 @@ _HTML = r"""<!DOCTYPE html>
         <span class="spinner"></span>
         Convert
       </button>
-      <button class="btn-clear" onclick="doClear()">Clear</button>
+      <button class="btn-clear" onclick="doClear()" aria-label="Clear input and result">Clear</button>
       <span class="kbd-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> to convert</span>
     </div>
 
@@ -480,10 +707,52 @@ _HTML = r"""<!DOCTYPE html>
       </div>
     </div>
 
+    <!-- Fretboard -->
+    <div class="fretboard-section" id="fbSection">
+      <div class="section-label">Fretboard Visualization</div>
+
+      <div class="fb-controls">
+        <div class="fb-group">
+          <label for="instrumentSelect">Instrument</label>
+          <select id="instrumentSelect" class="fb-select" onchange="updateFretboard()">
+            <option value="guitar">Guitar (6-string)</option>
+            <option value="bass">Bass (4-string)</option>
+            <option value="bass5">Bass (5-string)</option>
+          </select>
+        </div>
+
+        <div class="fb-group">
+          <label for="viewModeSelect">Mode</label>
+          <select id="viewModeSelect" class="fb-select" onchange="updateFretboard()">
+            <option value="scale">Full Scale</option>
+            <option value="chord">Selected Chord</option>
+          </select>
+        </div>
+
+        <div class="fb-filter-group" id="fbFilters">
+          <span class="fb-filter-group-label">Degrees</span>
+          <button class="fb-filter-chip active" data-degree="1" aria-label="Toggle degree 1" onclick="toggleDegree(1)">1</button>
+          <button class="fb-filter-chip active" data-degree="2" aria-label="Toggle degree 2" onclick="toggleDegree(2)">2</button>
+          <button class="fb-filter-chip active" data-degree="3" aria-label="Toggle degree 3" onclick="toggleDegree(3)">3</button>
+          <button class="fb-filter-chip active" data-degree="4" aria-label="Toggle degree 4" onclick="toggleDegree(4)">4</button>
+          <button class="fb-filter-chip active" data-degree="5" aria-label="Toggle degree 5" onclick="toggleDegree(5)">5</button>
+          <button class="fb-filter-chip active" data-degree="6" aria-label="Toggle degree 6" onclick="toggleDegree(6)">6</button>
+          <button class="fb-filter-chip active" data-degree="7" aria-label="Toggle degree 7" onclick="toggleDegree(7)">7</button>
+          <button class="fb-filter-chip preset" aria-label="Show degrees 1, 3, and 6 only" onclick="applyPreset([1,3,6])">1-3-6</button>
+        </div>
+      </div>
+
+      <div class="fretboard-outer">
+        <div class="fretboard" id="fretboard">
+          <!-- Strings and frets generated by JS -->
+        </div>
+      </div>
+    </div>
+
   </div><!-- /card -->
 
   <!-- Examples -->
-  <div class="examples-section animate-in" style="animation-delay:0.1s">
+  <div class="examples-section animate-in-delay2">
     <div class="examples-header">Try an example</div>
     <div class="examples-grid" id="examplesGrid"></div>
   </div>
@@ -507,8 +776,10 @@ const EXAMPLES = [
 // Build example chips
 const grid = document.getElementById('examplesGrid');
 EXAMPLES.forEach(ex => {
-  const chip = document.createElement('div');
+  const chip = document.createElement('button');
+  chip.type = 'button';
   chip.className = 'example-chip';
+  chip.setAttribute('aria-label', `Example: ${ex.label}, ${ex.text}`);
   chip.innerHTML = `<div class="chip-label">${ex.label}</div><div class="chip-text">${escapeHtml(ex.text)}</div>`;
   chip.addEventListener('click', () => {
     document.getElementById('inputArea').value = ex.text;
@@ -546,30 +817,73 @@ function doConvert() {
 
 function renderOutput(data) {
   const box = document.getElementById('outputBox');
+  const fbSection = document.getElementById('fbSection');
 
   if (data.error) {
     box.className = 'output-box has-error animate-in';
     box.innerHTML = `<span class="output-error">⚠ ${escapeHtml(data.error)}</span>`;
+    fbSection.classList.remove('active');
     return;
   }
 
-  // Parse key/progression lines for highlight
   const raw = data.result || '';
-  const lines = raw.split('\n');
+  const blocks = raw.split('\n\n');
   let html = '';
-  lines.forEach(line => {
-    if (line.startsWith('Key:')) {
-      html += `<span class="output-key">${escapeHtml(line)}</span>\n`;
-    } else if (line === '') {
+
+  blocks.forEach(block => {
+    const lines = block.split('\n');
+    if (lines.length === 0) return;
+
+    let keyLine = lines[0];
+    let progressionLines = lines.slice(1);
+
+    const keyMatch = keyLine.match(/^Key:\s+([A-G](?:#|b)?)\s+([a-zA-Z]+)/i);
+    const keyTonic = keyMatch ? keyMatch[1] : "C";
+    const keyMode = (keyMatch && keyMatch[2].toLowerCase().startsWith('min')) ? "Minor" : "Major";
+
+    html += `<div class="output-block">`;
+    html += `<span class="output-key interactive-token" onclick="highlightToken(this, {type:'key', keyTonic:'${keyTonic}', keyMode:'${keyMode}'})">${escapeHtml(keyLine)}</span>\n`;
+
+    progressionLines.forEach(line => {
+      const tokens = line.split(/(\s+|[-|,|\|]|\/)/);
+      tokens.forEach(token => {
+        if (!token.trim() || /^[-,|\|/]$/.test(token)) {
+          html += escapeHtml(token);
+          return;
+        }
+
+        const isNns = /^[#b]?[1-7]/.test(token);
+        const isChord = /^[A-G]/.test(token);
+
+        if (isNns || isChord) {
+          const type = isNns ? 'nns' : 'chord';
+          const rootMatch = isChord ? token.match(/^[A-G](?:#|b)?/) : null;
+          const root = rootMatch ? rootMatch[0] : null;
+          const dataJson = JSON.stringify({
+            type,
+            text: token,
+            root,
+            keyTonic,
+            keyMode
+          }).replace(/"/g, '&quot;');
+
+          html += `<span class="output-progression interactive-token" onclick="highlightToken(this, ${dataJson})">${escapeHtml(token)}</span>`;
+        } else {
+          html += escapeHtml(token);
+        }
+      });
       html += '\n';
-    } else {
-      html += `<span class="output-progression">${escapeHtml(line)}</span>\n`;
-    }
+    });
+    html += `</div>`;
   });
-  html = html.trimEnd();
 
   box.className = 'output-box has-result animate-in';
-  box.innerHTML = html + `\n<button class="btn-copy" onclick="copyResult(this)" title="Copy to clipboard">Copy</button>`;
+  box.innerHTML = html.trimEnd() + `\n<button class="btn-copy" onclick="copyResult(this)" title="Copy to clipboard">Copy</button>`;
+
+  fbSection.classList.add('active');
+
+  const firstToken = box.querySelector('.interactive-token');
+  if (firstToken) firstToken.click();
 }
 
 function copyResult(btn) {
@@ -590,7 +904,185 @@ function doClear() {
   const box = document.getElementById('outputBox');
   box.className = 'output-box';
   box.innerHTML = '<span class="output-placeholder">Result will appear here&hellip;</span>';
+  document.getElementById('fbSection').classList.remove('active');
+  selectedChord = null;
   document.getElementById('inputArea').focus();
+}
+
+// ── Fretboard Logic ────────────────────────────────────────────────────────
+
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const SCALE_DEGREES = {
+  "Major": [0, 2, 4, 5, 7, 9, 11],
+  "Minor": [0, 2, 3, 5, 7, 8, 10]
+};
+
+const TUNINGS = {
+  guitar: [4, 11, 7, 2, 9, 4], // E B G D A E
+  bass: [7, 2, 9, 4],       // G D A E
+  bass5: [7, 2, 9, 4, 11]    // G D A E B
+};
+
+let currentKey = { tonic: "C", mode: "Major" };
+let selectedChord = null;
+let visibleDegrees = new Set([1, 2, 3, 4, 5, 6, 7]);
+
+function getNoteValue(name) {
+  const map = {
+    "C":0,"B#":0,"C#":1,"Db":1,"D":2,"D#":3,"Eb":3,"E":4,"Fb":4,"F":5,"E#":5,
+    "F#":6,"Gb":6,"G":7,"G#":8,"Ab":8,"A":9,"A#":10,"Bb":10,"B":11,"Cb":11
+  };
+  return map[name.replace(/maj7|mmaj7|min|maj|dim|aug|sus2|sus4|m|7|6|9|11|13|add\d+|[#b]\d+/gi, "")] ?? 0;
+}
+
+function updateFretboard() {
+  const container = document.getElementById('fretboard');
+  const instrument = document.getElementById('instrumentSelect').value;
+  const viewMode = document.getElementById('viewModeSelect').value;
+  const tuning = TUNINGS[instrument];
+  const numFrets = 15;
+
+  container.innerHTML = '';
+  container.style.height = (tuning.length * 28) + 'px';
+
+  // Draw frets
+  for (let i = 0; i <= numFrets; i++) {
+    const fret = document.createElement('div');
+    fret.className = i === 0 ? 'fb-fret-line nut' : 'fb-fret-line';
+    fret.style.left = (i * (100 / numFrets)) + '%';
+    container.appendChild(fret);
+
+    // Marker dots
+    if ([3, 5, 7, 9].includes(i)) {
+      const marker = document.createElement('div');
+      marker.className = 'fb-marker';
+      marker.style.left = ((i - 0.5) * (100 / numFrets)) + '%';
+      container.appendChild(marker);
+    } else if (i === 12) {
+      [0.25, 0.75].forEach(pos => {
+        const marker = document.createElement('div');
+        marker.className = 'fb-marker';
+        marker.style.left = ((i - 0.5) * (100 / numFrets)) + '%';
+        marker.style.top = (pos * 100) + '%';
+        container.appendChild(marker);
+      });
+    }
+  }
+
+  // Draw strings and notes
+  tuning.forEach((openNote, stringIdx) => {
+    const stringLine = document.createElement('div');
+    stringLine.className = 'fb-string-line';
+    stringLine.style.top = ((stringIdx + 0.5) * (100 / tuning.length)) + '%';
+    container.appendChild(stringLine);
+
+    for (let fret = 0; fret <= numFrets; fret++) {
+      const noteVal = (openNote + fret) % 12;
+      const degreeInfo = getDegreeInKey(noteVal, currentKey);
+
+      if (!degreeInfo) continue;
+
+      let shouldShow = false;
+      let label = degreeInfo.degree;
+      let isTonic = degreeInfo.degree === 1;
+
+      if (viewMode === 'scale') {
+        shouldShow = visibleDegrees.has(degreeInfo.degree);
+      } else if (viewMode === 'chord' && selectedChord) {
+        const chordNotes = getChordNotes(selectedChord, currentKey);
+        shouldShow = chordNotes.includes(noteVal);
+        isTonic = noteVal === getNoteValue(selectedChord.root);
+      }
+
+      if (shouldShow) {
+        const dot = document.createElement('div');
+        const isSelectedTonic = isTonic || (viewMode === 'chord' && selectedChord && selectedChord.type === 'nns' && degreeInfo.degree === parseInt(selectedChord.text.match(/[1-7]/)[0]));
+        dot.className = `fb-note-dot degree-${degreeInfo.degree} ${isSelectedTonic ? 'tonic' : ''}`;
+        dot.style.left = ((fret === 0 ? 0.5 : fret - 0.5) * (100 / numFrets)) + '%';
+        dot.style.top = ((stringIdx + 0.5) * (100 / tuning.length)) + '%';
+        dot.textContent = label;
+        container.appendChild(dot);
+      }
+    }
+  });
+}
+
+function getDegreeInKey(noteVal, key) {
+  const tonicVal = getNoteValue(key.tonic);
+  const diff = (noteVal - tonicVal + 12) % 12;
+  const scale = SCALE_DEGREES[key.mode];
+  const idx = scale.indexOf(diff);
+  return idx !== -1 ? { degree: idx + 1, val: noteVal } : null;
+}
+
+function getChordNotes(chord, key) {
+  // Simple chord note derivation
+  let rootVal;
+  if (chord.type === 'nns') {
+    const steps = {"1":0,"b2":1,"2":2,"b3":3,"3":4,"4":5,"#4":6,"5":7,"b6":8,"6":9,"b7":10,"7":11};
+    const degMatch = chord.text.match(/^[#b]?[1-7]/);
+    rootVal = (getNoteValue(key.tonic) + (steps[degMatch[0]] || 0)) % 12;
+  } else {
+    rootVal = getNoteValue(chord.root);
+  }
+
+  // Basic triad/7th logic
+  const notes = [rootVal];
+  const text = chord.text.toLowerCase();
+
+  // Third
+  if (text.includes('m') && !text.includes('maj')) notes.push((rootVal + 3) % 12);
+  else if (text.includes('dim')) notes.push((rootVal + 3) % 12);
+  else if (text.includes('sus4')) notes.push((rootVal + 5) % 12);
+  else if (text.includes('sus2')) notes.push((rootVal + 2) % 12);
+  else notes.push((rootVal + 4) % 12);
+
+  // Fifth
+  if (text.includes('dim') || text.includes('b5')) notes.push((rootVal + 6) % 12);
+  else if (text.includes('aug') || text.includes('+')) notes.push((rootVal + 8) % 12);
+  else notes.push((rootVal + 7) % 12);
+
+  // Seventh
+  if (text.includes('maj7')) notes.push((rootVal + 11) % 12);
+  else if (text.includes('7')) notes.push((rootVal + 10) % 12);
+
+  return notes;
+}
+
+function toggleDegree(d) {
+  if (visibleDegrees.has(d)) visibleDegrees.delete(d);
+  else visibleDegrees.add(d);
+
+  _syncFilterUI();
+  updateFretboard();
+}
+
+function applyPreset(degrees) {
+  visibleDegrees = new Set(degrees);
+  _syncFilterUI();
+  updateFretboard();
+}
+
+function _syncFilterUI() {
+  document.querySelectorAll('.fb-filter-chip[data-degree]').forEach(btn => {
+    const d = parseInt(btn.dataset.degree);
+    btn.classList.toggle('active', visibleDegrees.has(d));
+  });
+}
+
+function highlightToken(tokenEl, data) {
+  document.querySelectorAll('.interactive-token').forEach(el => el.classList.remove('active-highlight'));
+  tokenEl.classList.add('active-highlight');
+
+  currentKey = { tonic: data.keyTonic, mode: data.keyMode };
+  if (data.type === 'chord' || data.type === 'nns') {
+    selectedChord = data;
+    document.getElementById('viewModeSelect').value = 'chord';
+  } else {
+    selectedChord = null;
+    document.getElementById('viewModeSelect').value = 'scale';
+  }
+  updateFretboard();
 }
 
 // Keyboard shortcut
@@ -602,7 +1094,9 @@ document.addEventListener('keydown', e => {
 });
 
 // Auto-focus input
-window.addEventListener('load', () => document.getElementById('inputArea').focus());
+window.addEventListener('load', () => {
+  document.getElementById('inputArea').focus();
+});
 </script>
 </body>
 </html>
@@ -681,22 +1175,57 @@ def _find_free_port(start: int = 8765) -> int:
     raise OSError(f"Unable to find an available port after 100 attempts (starting from {start})")
 
 
+def _start_server(server: HTTPServer) -> None:
+    try:
+        server.serve_forever()
+    except Exception:
+        pass
+
+
 def main() -> None:
     port = _find_free_port()
     server = HTTPServer(("127.0.0.1", port), _Handler)
     url = f"http://127.0.0.1:{port}"
-    print(f"Nashville Numbers GUI → {url}")
-    print("Press Ctrl-C to stop.")
+    print(f"Nashville Numbers GUI serving at {url}")
 
-    # Open browser after a short delay so the server is ready
-    threading.Timer(0.3, lambda: webbrowser.open(url)).start()
+    # Run the HTTP server in a background thread
+    server_thread = threading.Thread(target=_start_server, args=(server,), daemon=True)
+    server_thread.start()
 
     try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nStopped.")
+        import webview
+
+        # Open as a native desktop application window
+        webview.create_window(
+            "Nashville Numbers",
+            url,
+            width=800,
+            height=700,
+            min_size=(400, 500)
+        )
+        webview.start()
+
+    except (ImportError, Exception) as e:
+        if isinstance(e, ImportError):
+            print("pywebview not installed. Falling back to default browser.")
+        else:
+            print(f"Failed to start native window: {e}. Falling back to default browser.")
+        print("Press Ctrl-C to stop.")
+
+        # Open browser after a short delay so the server is ready
+        threading.Timer(0.3, lambda: webbrowser.open(url)).start()
+
+        try:
+            # Block the main thread to keep the daemon server thread alive
+            while True:
+                threading.Event().wait(3600)
+        except KeyboardInterrupt:
+            print("\nStopped.")
+
     finally:
+        server.shutdown()
         server.server_close()
+        server_thread.join(timeout=1.0)
 
 
 if __name__ == "__main__":
