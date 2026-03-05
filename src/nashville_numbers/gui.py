@@ -1266,13 +1266,13 @@ _HTML = r"""<!DOCTYPE html>
 
         <div class="fb-filter-group" id="fbFilters">
           <span class="fb-filter-group-label">Degrees</span>
-          <button class="fb-filter-chip active" data-degree="1" aria-label="Toggle degree 1" onclick="toggleDegree(1)">1</button>
-          <button class="fb-filter-chip active" data-degree="2" aria-label="Toggle degree 2" onclick="toggleDegree(2)">2</button>
-          <button class="fb-filter-chip active" data-degree="3" aria-label="Toggle degree 3" onclick="toggleDegree(3)">3</button>
-          <button class="fb-filter-chip active" data-degree="4" aria-label="Toggle degree 4" onclick="toggleDegree(4)">4</button>
-          <button class="fb-filter-chip active" data-degree="5" aria-label="Toggle degree 5" onclick="toggleDegree(5)">5</button>
-          <button class="fb-filter-chip active" data-degree="6" aria-label="Toggle degree 6" onclick="toggleDegree(6)">6</button>
-          <button class="fb-filter-chip active" data-degree="7" aria-label="Toggle degree 7" onclick="toggleDegree(7)">7</button>
+          <button class="fb-filter-chip active" data-degree="1" aria-pressed="true" aria-label="Toggle degree 1" onclick="toggleDegree(1)">1</button>
+          <button class="fb-filter-chip active" data-degree="2" aria-pressed="true" aria-label="Toggle degree 2" onclick="toggleDegree(2)">2</button>
+          <button class="fb-filter-chip active" data-degree="3" aria-pressed="true" aria-label="Toggle degree 3" onclick="toggleDegree(3)">3</button>
+          <button class="fb-filter-chip active" data-degree="4" aria-pressed="true" aria-label="Toggle degree 4" onclick="toggleDegree(4)">4</button>
+          <button class="fb-filter-chip active" data-degree="5" aria-pressed="true" aria-label="Toggle degree 5" onclick="toggleDegree(5)">5</button>
+          <button class="fb-filter-chip active" data-degree="6" aria-pressed="true" aria-label="Toggle degree 6" onclick="toggleDegree(6)">6</button>
+          <button class="fb-filter-chip active" data-degree="7" aria-pressed="true" aria-label="Toggle degree 7" onclick="toggleDegree(7)">7</button>
           <button class="fb-filter-chip preset" aria-label="Show degrees 1, 3, and 6 only" onclick="applyPreset([1,3,6])">1-3-6</button>
         </div>
 
@@ -1699,7 +1699,13 @@ function doClear() {
   builderClear();
   resetStage();
   const inputArea = document.getElementById('inputArea');
-  if (inputArea) inputArea.value = '';
+  if (inputArea) {
+    inputArea.value = '';
+    // Focus if Text tab is active
+    if (document.getElementById('panelText').style.display !== 'none') {
+      inputArea.focus();
+    }
+  }
   const box = document.getElementById('outputBox');
   box.className = 'output-box';
   box.innerHTML = '<span class="output-placeholder">Result will appear here&hellip;</span>';
@@ -2221,7 +2227,9 @@ function applyPreset(degrees) {
 function _syncFilterUI() {
   document.querySelectorAll('.fb-filter-chip[data-degree]').forEach(btn => {
     const d = parseInt(btn.dataset.degree);
-    btn.classList.toggle('active', visibleDegrees.has(d));
+    const isActive = visibleDegrees.has(d);
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   });
 }
 
