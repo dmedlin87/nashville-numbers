@@ -13,9 +13,11 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 
+from .audio import AudioInstallError, AudioUnavailableError, get_audio_service
 from .converter import convert
 
 MAX_INPUT_LENGTH = 1_000_000  # 1MB
+AUDIO_SERVICE = get_audio_service()
 
 # ---------------------------------------------------------------------------
 # HTML template – embedded so the GUI is a single self-contained module.
@@ -472,6 +474,60 @@ _HTML = r"""<!DOCTYPE html>
     margin-bottom: 1.25rem;
   }
 
+  .audio-status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .audio-status-pill {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.24rem 0.65rem;
+    background: rgba(124,92,252,0.08);
+    color: var(--text-muted);
+  }
+
+  .audio-status-pill.ready {
+    border-color: rgba(74, 222, 128, 0.45);
+    color: #bbf7d0;
+    background: rgba(74, 222, 128, 0.08);
+  }
+
+  .audio-status-pill.warn {
+    border-color: rgba(248, 113, 113, 0.45);
+    color: #fecaca;
+    background: rgba(248, 113, 113, 0.08);
+  }
+
+  .audio-install-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.34rem 0.72rem;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+
+  .audio-install-btn:hover {
+    color: var(--text);
+    border-color: var(--accent);
+    background: rgba(124, 92, 252, 0.12);
+  }
+
+  .audio-install-btn.loading {
+    opacity: 0.65;
+    pointer-events: none;
+  }
+
   .fb-group {
     display: flex;
     align-items: center;
@@ -617,6 +673,10 @@ _HTML = r"""<!DOCTYPE html>
     box-shadow: 0 2px 5px rgba(0,0,0,0.4);
     transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     cursor: default;
+  }
+
+  .fb-note-dot.playable {
+    cursor: pointer;
   }
 
   .fb-note-dot.tonic { background: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.5); }
@@ -1215,6 +1275,13 @@ _HTML = r"""<!DOCTYPE html>
           <button class="fb-filter-chip active" data-degree="7" aria-label="Toggle degree 7" onclick="toggleDegree(7)">7</button>
           <button class="fb-filter-chip preset" aria-label="Show degrees 1, 3, and 6 only" onclick="applyPreset([1,3,6])">1-3-6</button>
         </div>
+
+        <div class="audio-status">
+          <span id="audioStatusPill" class="audio-status-pill warn" aria-live="polite">Web Tone Fallback</span>
+          <button id="audioInstallBtn" class="audio-install-btn" onclick="installDefaultPack()" style="display:none">
+            Install Free HQ Pack
+          </button>
+        </div>
       </div>
 
       <div class="fretboard-outer">
@@ -1270,6 +1337,254 @@ function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+let audioState = {
+  hq_ready: false,
+  engine: 'unavailable',
+  reason: 'init_error',
+  fallback: 'web_tone',
+  pack: { id: 'fluidr3_gm', installed: false, path: null }
+};
+let installInProgress = false;
+
+const webTone = (() => {
+  let ctx = null;
+  const voices = new Map();
+
+  function ensureCtx() {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  function midiToFreq(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  function noteOn(midi, velocity = 96) {
+    const audioCtx = ensureCtx();
+    const now = audioCtx.currentTime;
+    const key = String(midi);
+    if (voices.has(key)) {
+      noteOff(midi);
+    }
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const tone = audioCtx.createOscillator();
+    const toneGain = audioCtx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(midiToFreq(midi), now);
+    tone.type = 'sine';
+    tone.frequency.setValueAtTime(midiToFreq(midi) * 2, now);
+
+    const peak = Math.max(0.05, Math.min(0.45, velocity / 255));
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(peak, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(peak * 0.68, now + 0.09);
+
+    toneGain.gain.setValueAtTime(0.0001, now);
+    toneGain.gain.exponentialRampToValueAtTime(peak * 0.18, now + 0.02);
+    toneGain.gain.exponentialRampToValueAtTime(peak * 0.08, now + 0.1);
+
+    osc.connect(gain).connect(audioCtx.destination);
+    tone.connect(toneGain).connect(audioCtx.destination);
+    osc.start(now);
+    tone.start(now);
+
+    voices.set(key, { osc, tone, gain, toneGain });
+  }
+
+  function noteOff(midi) {
+    const voice = voices.get(String(midi));
+    if (!voice || !ctx) return;
+    const now = ctx.currentTime;
+    voice.gain.gain.cancelScheduledValues(now);
+    voice.toneGain.gain.cancelScheduledValues(now);
+    voice.gain.gain.setValueAtTime(Math.max(0.0001, voice.gain.gain.value), now);
+    voice.toneGain.gain.setValueAtTime(Math.max(0.0001, voice.toneGain.gain.value), now);
+    voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    voice.toneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    voice.osc.stop(now + 0.2);
+    voice.tone.stop(now + 0.2);
+    voices.delete(String(midi));
+  }
+
+  function playNote(midi, velocity = 96, durationMs = 450) {
+    noteOn(midi, velocity);
+    window.setTimeout(() => noteOff(midi), durationMs);
+  }
+
+  function playChord(midis, style = 'strum', strumMs = 28, noteMs = 700, velocity = 96) {
+    midis.forEach((midi, idx) => {
+      const delay = style === 'strum' ? idx * strumMs : 0;
+      window.setTimeout(() => playNote(midi, velocity, noteMs), delay);
+    });
+  }
+
+  function panic() {
+    Array.from(voices.keys()).forEach(key => noteOff(parseInt(key, 10)));
+  }
+
+  return { noteOn, noteOff, playNote, playChord, panic };
+})();
+
+function _setAudioState(nextState) {
+  audioState = {
+    hq_ready: !!nextState.hq_ready,
+    engine: nextState.engine || 'unavailable',
+    reason: nextState.reason || 'init_error',
+    fallback: nextState.fallback || 'web_tone',
+    pack: nextState.pack || { id: 'fluidr3_gm', installed: false, path: null }
+  };
+  updateAudioStatusUI();
+}
+
+function updateAudioStatusUI() {
+  const pill = document.getElementById('audioStatusPill');
+  const installBtn = document.getElementById('audioInstallBtn');
+  if (!pill || !installBtn) return;
+
+  pill.classList.remove('ready', 'warn');
+
+  if (audioState.hq_ready) {
+    pill.classList.add('ready');
+    pill.textContent = 'HQ Ready';
+    installBtn.style.display = 'none';
+    return;
+  }
+
+  pill.classList.add('warn');
+  if (audioState.reason === 'missing_soundfont') {
+    pill.textContent = 'HQ Missing • Web Tone Fallback';
+  } else if (audioState.reason === 'missing_fluidsynth') {
+    pill.textContent = 'FluidSynth Missing • Web Tone Fallback';
+  } else if (audioState.reason === 'disabled') {
+    pill.textContent = 'Audio Disabled';
+  } else {
+    pill.textContent = 'Web Tone Fallback';
+  }
+
+  installBtn.style.display = audioState.reason === 'missing_soundfont' ? '' : 'none';
+}
+
+async function refreshAudioStatus() {
+  try {
+    const response = await fetch('/audio/status');
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'status failed');
+    _setAudioState(payload);
+  } catch (_err) {
+    _setAudioState({ hq_ready: false, engine: 'unavailable', reason: 'init_error', fallback: 'web_tone', pack: { id: 'fluidr3_gm', installed: false, path: null } });
+  }
+}
+
+async function installDefaultPack() {
+  if (installInProgress) return;
+  const btn = document.getElementById('audioInstallBtn');
+  if (!btn) return;
+  installInProgress = true;
+  btn.classList.add('loading');
+  try {
+    const response = await fetch('/audio/install-default', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      if (payload && payload.reason) {
+        _setAudioState({
+          hq_ready: false,
+          engine: 'unavailable',
+          reason: payload.reason,
+          fallback: 'web_tone',
+          pack: audioState.pack
+        });
+      }
+      return;
+    }
+    _setAudioState(payload.status || payload);
+  } catch (_err) {
+    _setAudioState({
+      hq_ready: false,
+      engine: 'unavailable',
+      reason: 'init_error',
+      fallback: 'web_tone',
+      pack: audioState.pack
+    });
+  } finally {
+    btn.classList.remove('loading');
+    installInProgress = false;
+  }
+}
+
+async function _postAudio(endpoint, payload) {
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const body = await response.json();
+    if (response.status === 409) {
+      _setAudioState({
+        hq_ready: false,
+        engine: 'unavailable',
+        reason: body.reason || 'init_error',
+        fallback: 'web_tone',
+        pack: audioState.pack
+      });
+      return false;
+    }
+    if (!response.ok) return false;
+    if (body.status) _setAudioState(body.status);
+    return true;
+  } catch (_err) {
+    _setAudioState({
+      hq_ready: false,
+      engine: 'unavailable',
+      reason: 'init_error',
+      fallback: 'web_tone',
+      pack: audioState.pack
+    });
+    return false;
+  }
+}
+
+async function playNotePreview(midi, velocity = 96, durationMs = 450, channel = 0) {
+  const ok = audioState.hq_ready
+    ? await _postAudio('/audio/play-note', { midi, velocity, duration_ms: durationMs, channel })
+    : false;
+  if (!ok) webTone.playNote(midi, velocity, durationMs);
+}
+
+async function noteOnPreview(midi, velocity = 96, channel = 0) {
+  const ok = audioState.hq_ready
+    ? await _postAudio('/audio/note-on', { midi, velocity, channel })
+    : false;
+  if (!ok) webTone.noteOn(midi, velocity);
+}
+
+async function noteOffPreview(midi, channel = 0) {
+  const ok = audioState.hq_ready
+    ? await _postAudio('/audio/note-off', { midi, channel })
+    : false;
+  if (!ok) webTone.noteOff(midi);
+}
+
+async function playChordPreview(midis, style = 'strum', strumMs = 28, noteMs = 700, velocity = 96, channel = 0) {
+  const ok = audioState.hq_ready
+    ? await _postAudio('/audio/play-chord', { midis, style, strum_ms: strumMs, note_ms: noteMs, velocity, channel })
+    : false;
+  if (!ok) webTone.playChord(midis, style, strumMs, noteMs, velocity);
+}
+
+function panicAudio() {
+  webTone.panic();
+  if (audioState.hq_ready) _postAudio('/audio/panic', {});
+}
+
 function doConvert() {
   const builderPanel = document.getElementById('panelBuilder');
   const input = (builderPanel && builderPanel.style.display !== 'none')
@@ -1323,7 +1638,7 @@ function renderOutput(data) {
     const keyMode = (keyMatch && keyMatch[2].toLowerCase().startsWith('min')) ? "Minor" : "Major";
 
     html += `<div class="output-block">`;
-    html += `<span class="output-key interactive-token" onclick="highlightToken(this, {type:'key', keyTonic:'${keyTonic}', keyMode:'${keyMode}'})">${escapeHtml(keyLine)}</span>\n`;
+    html += `<span class="output-key interactive-token" onclick="handleTokenInteraction(this, {type:'key', keyTonic:'${keyTonic}', keyMode:'${keyMode}'})">${escapeHtml(keyLine)}</span>\n`;
 
     progressionLines.forEach(line => {
       const tokens = line.split(/(\s+|[-|,|\|]|\/)/);
@@ -1348,7 +1663,7 @@ function renderOutput(data) {
             keyMode
           }).replace(/"/g, '&quot;');
 
-          html += `<span class="output-progression interactive-token" onclick="highlightToken(this, ${dataJson})">${escapeHtml(token)}</span>`;
+          html += `<span class="output-progression interactive-token" onclick="handleTokenInteraction(this, ${dataJson})">${escapeHtml(token)}</span>`;
         } else {
           html += escapeHtml(token);
         }
@@ -1390,6 +1705,7 @@ function doClear() {
   box.innerHTML = '<span class="output-placeholder">Result will appear here&hellip;</span>';
   document.getElementById('fbSection').classList.remove('active');
   selectedChord = null;
+  panicAudio();
 }
 
 // ── Builder Logic ───────────────────────────────────────────────────────────
@@ -1699,10 +2015,17 @@ const TUNINGS = {
   bass5: [7, 2, 9, 4, 11]    // G D A E B
 };
 
+const MIDI_TUNINGS = {
+  guitar: [64, 59, 55, 50, 45, 40], // E4 B3 G3 D3 A2 E2
+  bass: [43, 38, 33, 28],           // G2 D2 A1 E1
+  bass5: [43, 38, 33, 28, 23]       // G2 D2 A1 E1 B0
+};
+
 let currentKey = { tonic: "C", mode: "Major" };
 let selectedChord = null;
 let visibleDegrees = new Set([1, 2, 3, 4, 5, 6, 7]);
 let resizeTimer = null;
+const activeFretPointers = new Map();
 
 function getNoteValue(name) {
   const map = {
@@ -1724,6 +2047,7 @@ function updateFretboard() {
   const instrument = document.getElementById('instrumentSelect').value;
   const viewMode = document.getElementById('viewModeSelect').value;
   const tuning = TUNINGS[instrument];
+  const midiTuning = MIDI_TUNINGS[instrument] || [];
   const numFrets = 15;
   const stringSpacing = getStringSpacing();
 
@@ -1763,6 +2087,7 @@ function updateFretboard() {
 
     for (let fret = 0; fret <= numFrets; fret++) {
       const noteVal = (openNote + fret) % 12;
+      const midiVal = (midiTuning[stringIdx] ?? 48) + fret;
       const degreeInfo = getDegreeInKey(noteVal, currentKey);
 
       if (!degreeInfo) continue;
@@ -1782,10 +2107,12 @@ function updateFretboard() {
       if (shouldShow) {
         const dot = document.createElement('div');
         const isSelectedTonic = isTonic || (viewMode === 'chord' && selectedChord && selectedChord.type === 'nns' && degreeInfo.degree === parseInt(selectedChord.text.match(/[1-7]/)[0]));
-        dot.className = `fb-note-dot degree-${degreeInfo.degree} ${isSelectedTonic ? 'tonic' : ''}`;
+        dot.className = `fb-note-dot playable degree-${degreeInfo.degree} ${isSelectedTonic ? 'tonic' : ''}`;
         dot.style.left = ((fret === 0 ? 0.5 : fret - 0.5) * (100 / numFrets)) + '%';
         dot.style.top = ((stringIdx + 0.5) * (100 / tuning.length)) + '%';
         dot.textContent = label;
+        dot.dataset.midi = String(midiVal);
+        wireFretDotAudio(dot, midiVal);
         container.appendChild(dot);
       }
     }
@@ -1802,14 +2129,7 @@ function getDegreeInKey(noteVal, key) {
 
 function getChordNotes(chord, key) {
   // Simple chord note derivation
-  let rootVal;
-  if (chord.type === 'nns') {
-    const steps = {"1":0,"b2":1,"2":2,"b3":3,"3":4,"4":5,"#4":6,"5":7,"b6":8,"6":9,"b7":10,"7":11};
-    const degMatch = chord.text.match(/^[#b]?[1-7]/);
-    rootVal = (getNoteValue(key.tonic) + (steps[degMatch[0]] || 0)) % 12;
-  } else {
-    rootVal = getNoteValue(chord.root);
-  }
+  const rootVal = getChordRootValue(chord, key);
 
   // Basic triad/7th logic
   const notes = [rootVal];
@@ -1832,6 +2152,56 @@ function getChordNotes(chord, key) {
   else if (text.includes('7')) notes.push((rootVal + 10) % 12);
 
   return notes;
+}
+
+function getChordRootValue(chord, key) {
+  if (chord.type === 'nns') {
+    const steps = {"1":0,"b2":1,"2":2,"b3":3,"3":4,"4":5,"#4":6,"5":7,"b6":8,"6":9,"b7":10,"7":11};
+    const degMatch = chord.text.match(/^[#b]?[1-7]/);
+    const degree = degMatch ? degMatch[0] : "1";
+    return (getNoteValue(key.tonic) + (steps[degree] || 0)) % 12;
+  }
+  return getNoteValue(chord.root || chord.text);
+}
+
+function getChordMidiNotes(chord, key) {
+  const rootVal = getChordRootValue(chord, key);
+  const pcs = getChordNotes(chord, key);
+  const baseRoot = 48 + rootVal;
+  const midis = [];
+  let previous = baseRoot - 1;
+
+  pcs.forEach(pc => {
+    let midi = baseRoot + ((pc - rootVal + 12) % 12);
+    while (midi <= previous) midi += 12;
+    if (midis.indexOf(midi) === -1) {
+      midis.push(midi);
+      previous = midi;
+    }
+  });
+
+  return midis.slice(0, 8);
+}
+
+function wireFretDotAudio(dot, midiVal) {
+  const release = (pointerId) => {
+    if (!activeFretPointers.has(pointerId)) return;
+    const midi = activeFretPointers.get(pointerId);
+    activeFretPointers.delete(pointerId);
+    noteOffPreview(midi, 0);
+  };
+
+  dot.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    activeFretPointers.set(event.pointerId, midiVal);
+    if (dot.setPointerCapture) dot.setPointerCapture(event.pointerId);
+    noteOnPreview(midiVal, 96, 0);
+  });
+
+  dot.addEventListener('pointerup', (event) => release(event.pointerId));
+  dot.addEventListener('pointercancel', (event) => release(event.pointerId));
+  dot.addEventListener('pointerleave', (event) => release(event.pointerId));
+  dot.addEventListener('lostpointercapture', (event) => release(event.pointerId));
 }
 
 function toggleDegree(d) {
@@ -1870,6 +2240,13 @@ function highlightToken(tokenEl, data) {
   updateFretboard();
 }
 
+function handleTokenInteraction(tokenEl, data) {
+  highlightToken(tokenEl, data);
+  if (data.type !== 'chord' && data.type !== 'nns') return;
+  const midis = getChordMidiNotes(data, currentKey);
+  if (midis.length > 0) playChordPreview(midis, 'strum', 28, 700, 96, 0);
+}
+
 // Keyboard shortcut
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -1887,6 +2264,11 @@ window.addEventListener('resize', () => {
 // Init
 window.addEventListener('load', () => {
   initBuilder();
+  refreshAudioStatus();
+});
+
+window.addEventListener('beforeunload', () => {
+  panicAudio();
 });
 </script>
 </body>
@@ -1908,37 +2290,35 @@ class _Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path in ("/", "/index.html"):
             self._send_html(_HTML)
+        elif parsed.path == "/audio/status":
+            self._send_json(AUDIO_SERVICE.status())
         else:
             self._send_json({"error": "not found"}, status=404)
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path != "/convert":
-            self._send_json({"error": "not found"}, status=404)
+        if parsed.path == "/convert":
+            self._handle_convert()
             return
-
-        length = int(self.headers.get("Content-Length", 0))
-        if length > MAX_INPUT_LENGTH:
-            self._send_json({"error": "Payload too large"}, status=413)
+        if parsed.path == "/audio/install-default":
+            self._handle_audio_install_default()
             return
-        body = self.rfile.read(length)
-        try:
-            payload = json.loads(body)
-            if not isinstance(payload, dict):
-                self._send_json({"error": "Expected JSON object"}, status=400)
-                return
-        except json.JSONDecodeError:
-            self._send_json({"error": "Invalid JSON in request body"}, status=400)
+        if parsed.path == "/audio/play-note":
+            self._handle_audio_play_note()
             return
-        try:
-            input_text = str(payload.get("input", "")).strip()
-            if not input_text:
-                self._send_json({"error": "Empty input"})
-                return
-            result = convert(input_text)
-            self._send_json({"result": result})
-        except (ValueError, KeyError, TypeError) as exc:
-            self._send_json({"error": str(exc)})
+        if parsed.path == "/audio/note-on":
+            self._handle_audio_note_on()
+            return
+        if parsed.path == "/audio/note-off":
+            self._handle_audio_note_off()
+            return
+        if parsed.path == "/audio/play-chord":
+            self._handle_audio_play_chord()
+            return
+        if parsed.path == "/audio/panic":
+            self._handle_audio_panic()
+            return
+        self._send_json({"error": "not found"}, status=404)
 
     def _send_html(self, html: str) -> None:
         data = html.encode()
@@ -1955,6 +2335,172 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _read_json_payload(self) -> dict | None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self._send_json({"error": "Invalid Content-Length header"}, status=400)
+            return None
+        if length > MAX_INPUT_LENGTH:
+            self._send_json({"error": "Payload too large"}, status=413)
+            return None
+        body = self.rfile.read(length) if length > 0 else b"{}"
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            self._send_json({"error": "Invalid JSON in request body"}, status=400)
+            return None
+        if not isinstance(payload, dict):
+            self._send_json({"error": "Expected JSON object"}, status=400)
+            return None
+        return payload
+
+    def _int_field(
+        self,
+        payload: dict,
+        key: str,
+        *,
+        minimum: int,
+        maximum: int,
+        default: int | None = None,
+        required: bool = False,
+    ) -> int:
+        value = payload.get(key, default)
+        if value is None and required:
+            raise ValueError(f"'{key}' is required")
+        if value is None:
+            raise ValueError(f"'{key}' is required")
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"'{key}' must be an integer") from exc
+        if parsed < minimum or parsed > maximum:
+            raise ValueError(f"'{key}' must be between {minimum} and {maximum}")
+        return parsed
+
+    def _handle_convert(self) -> None:
+        payload = self._read_json_payload()
+        if payload is None:
+            return
+        try:
+            input_text = str(payload.get("input", "")).strip()
+            if not input_text:
+                self._send_json({"error": "Empty input"})
+                return
+            result = convert(input_text)
+            self._send_json({"result": result})
+        except (ValueError, KeyError, TypeError) as exc:
+            self._send_json({"error": str(exc)})
+
+    def _handle_audio_install_default(self) -> None:
+        payload = self._read_json_payload()
+        if payload is None:
+            return
+        try:
+            status = AUDIO_SERVICE.install_default_pack()
+            self._send_json({"status": status})
+        except AudioUnavailableError as exc:
+            self._send_json({"error": str(exc), "reason": exc.code}, status=409)
+        except AudioInstallError as exc:
+            self._send_json({"error": str(exc), "reason": exc.code}, status=500)
+        except Exception as exc:
+            self._send_json({"error": f"Failed to install pack: {exc}", "reason": "install_failed"}, status=500)
+
+    def _handle_audio_play_note(self) -> None:
+        payload = self._read_json_payload()
+        if payload is None:
+            return
+        try:
+            midi = self._int_field(payload, "midi", minimum=0, maximum=127, required=True)
+            velocity = self._int_field(payload, "velocity", minimum=1, maximum=127, default=96)
+            duration_ms = self._int_field(payload, "duration_ms", minimum=20, maximum=5000, default=450)
+            channel = self._int_field(payload, "channel", minimum=0, maximum=15, default=0)
+            AUDIO_SERVICE.play_note(midi, velocity=velocity, duration_ms=duration_ms, channel=channel)
+            self._send_json({"ok": True, "status": AUDIO_SERVICE.status()})
+        except ValueError as exc:
+            self._send_json({"error": str(exc), "reason": "validation"}, status=400)
+        except AudioUnavailableError as exc:
+            self._send_json({"error": str(exc), "reason": exc.code}, status=409)
+        except Exception as exc:
+            self._send_json({"error": f"Audio playback failed: {exc}", "reason": "init_error"}, status=500)
+
+    def _handle_audio_note_on(self) -> None:
+        payload = self._read_json_payload()
+        if payload is None:
+            return
+        try:
+            midi = self._int_field(payload, "midi", minimum=0, maximum=127, required=True)
+            velocity = self._int_field(payload, "velocity", minimum=1, maximum=127, default=96)
+            channel = self._int_field(payload, "channel", minimum=0, maximum=15, default=0)
+            AUDIO_SERVICE.note_on(midi, velocity=velocity, channel=channel)
+            self._send_json({"ok": True, "status": AUDIO_SERVICE.status()})
+        except ValueError as exc:
+            self._send_json({"error": str(exc), "reason": "validation"}, status=400)
+        except AudioUnavailableError as exc:
+            self._send_json({"error": str(exc), "reason": exc.code}, status=409)
+        except Exception as exc:
+            self._send_json({"error": f"Audio note_on failed: {exc}", "reason": "init_error"}, status=500)
+
+    def _handle_audio_note_off(self) -> None:
+        payload = self._read_json_payload()
+        if payload is None:
+            return
+        try:
+            midi = self._int_field(payload, "midi", minimum=0, maximum=127, required=True)
+            channel = self._int_field(payload, "channel", minimum=0, maximum=15, default=0)
+            AUDIO_SERVICE.note_off(midi, channel=channel)
+            self._send_json({"ok": True, "status": AUDIO_SERVICE.status()})
+        except ValueError as exc:
+            self._send_json({"error": str(exc), "reason": "validation"}, status=400)
+        except AudioUnavailableError as exc:
+            self._send_json({"error": str(exc), "reason": exc.code}, status=409)
+        except Exception as exc:
+            self._send_json({"error": f"Audio note_off failed: {exc}", "reason": "init_error"}, status=500)
+
+    def _handle_audio_play_chord(self) -> None:
+        payload = self._read_json_payload()
+        if payload is None:
+            return
+        try:
+            midis_value = payload.get("midis")
+            if not isinstance(midis_value, list):
+                raise ValueError("'midis' must be an array of midi notes")
+            if not (1 <= len(midis_value) <= 8):
+                raise ValueError("'midis' must contain between 1 and 8 notes")
+            midis = [self._int_field({"midi": value}, "midi", minimum=0, maximum=127, required=True) for value in midis_value]
+            style = str(payload.get("style", "strum")).strip().lower()
+            if style not in {"block", "strum"}:
+                raise ValueError("'style' must be 'block' or 'strum'")
+            strum_ms = self._int_field(payload, "strum_ms", minimum=5, maximum=120, default=28)
+            note_ms = self._int_field(payload, "note_ms", minimum=50, maximum=5000, default=700)
+            velocity = self._int_field(payload, "velocity", minimum=1, maximum=127, default=96)
+            channel = self._int_field(payload, "channel", minimum=0, maximum=15, default=0)
+            AUDIO_SERVICE.play_chord(
+                midis,
+                style=style,
+                strum_ms=strum_ms,
+                note_ms=note_ms,
+                velocity=velocity,
+                channel=channel,
+            )
+            self._send_json({"ok": True, "status": AUDIO_SERVICE.status()})
+        except ValueError as exc:
+            self._send_json({"error": str(exc), "reason": "validation"}, status=400)
+        except AudioUnavailableError as exc:
+            self._send_json({"error": str(exc), "reason": exc.code}, status=409)
+        except Exception as exc:
+            self._send_json({"error": f"Audio chord playback failed: {exc}", "reason": "init_error"}, status=500)
+
+    def _handle_audio_panic(self) -> None:
+        payload = self._read_json_payload()
+        if payload is None:
+            return
+        try:
+            AUDIO_SERVICE.panic()
+            self._send_json({"ok": True, "status": AUDIO_SERVICE.status()})
+        except Exception as exc:
+            self._send_json({"error": f"Audio panic failed: {exc}", "reason": "init_error"}, status=500)
 
 
 # ---------------------------------------------------------------------------
@@ -2020,6 +2566,10 @@ def main() -> None:
             print("\nStopped.")
 
     finally:
+        try:
+            AUDIO_SERVICE.panic()
+        except Exception:
+            pass
         server.shutdown()
         server.server_close()
         server_thread.join(timeout=1.0)

@@ -23,6 +23,14 @@ Talk to musicians the way musicians actually talk — in numbers. Throw in a cho
 pip install -e .
 ```
 
+### Optional HQ audio dependencies
+
+```bash
+pip install -e ".[audio]"
+```
+
+The GUI includes a first-run installer for a free default SoundFont pack (`FluidR3_GM`) and falls back to browser tone playback when HQ audio is unavailable.
+
 ---
 
 ## GUI — point, click, play

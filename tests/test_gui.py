@@ -11,7 +11,79 @@ from typing import Any
 
 import pytest
 
+from nashville_numbers.audio import AudioInstallError, AudioUnavailableError
 import nashville_numbers.gui as gui
+
+
+class _FakeAudioService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[Any, ...]] = []
+        self.raise_for: dict[str, Exception] = {}
+        self.status_payload: dict[str, Any] = {
+            "hq_ready": False,
+            "engine": "unavailable",
+            "reason": "missing_soundfont",
+            "fallback": "web_tone",
+            "pack": {"id": "fluidr3_gm", "installed": False, "path": None},
+        }
+
+    def status(self) -> dict[str, Any]:
+        self.calls.append(("status",))
+        return dict(self.status_payload)
+
+    def install_default_pack(self) -> dict[str, Any]:
+        self.calls.append(("install_default_pack",))
+        exc = self.raise_for.get("install_default_pack")
+        if exc:
+            raise exc
+        self.status_payload["hq_ready"] = True
+        self.status_payload["engine"] = "fluidsynth"
+        self.status_payload["reason"] = "ok"
+        self.status_payload["pack"] = {
+            "id": "fluidr3_gm",
+            "installed": True,
+            "path": "C:/tmp/FluidR3_GM.sf2",
+        }
+        return dict(self.status_payload)
+
+    def play_note(self, midi: int, *, velocity: int, duration_ms: int, channel: int) -> None:
+        self.calls.append(("play_note", midi, velocity, duration_ms, channel))
+        exc = self.raise_for.get("play_note")
+        if exc:
+            raise exc
+
+    def note_on(self, midi: int, *, velocity: int, channel: int) -> None:
+        self.calls.append(("note_on", midi, velocity, channel))
+        exc = self.raise_for.get("note_on")
+        if exc:
+            raise exc
+
+    def note_off(self, midi: int, *, channel: int) -> None:
+        self.calls.append(("note_off", midi, channel))
+        exc = self.raise_for.get("note_off")
+        if exc:
+            raise exc
+
+    def play_chord(
+        self,
+        midis: list[int],
+        *,
+        style: str,
+        strum_ms: int,
+        note_ms: int,
+        velocity: int,
+        channel: int,
+    ) -> None:
+        self.calls.append(("play_chord", midis, style, strum_ms, note_ms, velocity, channel))
+        exc = self.raise_for.get("play_chord")
+        if exc:
+            raise exc
+
+    def panic(self) -> None:
+        self.calls.append(("panic",))
+        exc = self.raise_for.get("panic")
+        if exc:
+            raise exc
 
 
 @pytest.fixture
@@ -57,6 +129,13 @@ def _post_json(port: int, path: str, payload: Any) -> tuple[int, dict[str, str],
     return status, headers, json.loads(text)
 
 
+@pytest.fixture
+def fake_audio_service(monkeypatch: pytest.MonkeyPatch) -> _FakeAudioService:
+    service = _FakeAudioService()
+    monkeypatch.setattr(gui, "AUDIO_SERVICE", service)
+    return service
+
+
 def test_get_root_serves_embedded_html(gui_server: int) -> None:
     status, headers, body = _request(gui_server, "GET", "/")
     assert status == 200
@@ -69,6 +148,47 @@ def test_get_unknown_path_returns_not_found_json(gui_server: int) -> None:
     assert status == 404
     assert "application/json" in headers["content-type"]
     assert json.loads(body) == {"error": "not found"}
+
+
+def test_get_audio_status_returns_current_audio_state(
+    gui_server: int, fake_audio_service: _FakeAudioService
+) -> None:
+    status, headers, body = _request(gui_server, "GET", "/audio/status")
+    assert status == 200
+    assert "application/json" in headers["content-type"]
+    payload = json.loads(body)
+    assert payload["hq_ready"] is False
+    assert payload["reason"] == "missing_soundfont"
+    assert payload["fallback"] == "web_tone"
+    assert fake_audio_service.calls == [("status",)]
+
+
+def test_post_audio_install_default_success_returns_status(
+    gui_server: int, fake_audio_service: _FakeAudioService
+) -> None:
+    status, _headers, payload = _post_json(gui_server, "/audio/install-default", {})
+    assert status == 200
+    assert payload["status"]["hq_ready"] is True
+    assert payload["status"]["engine"] == "fluidsynth"
+    assert payload["status"]["pack"]["installed"] is True
+
+
+def test_post_audio_install_default_unavailable_returns_conflict(
+    gui_server: int, fake_audio_service: _FakeAudioService
+) -> None:
+    fake_audio_service.raise_for["install_default_pack"] = AudioUnavailableError("disabled", "Audio disabled")
+    status, _headers, payload = _post_json(gui_server, "/audio/install-default", {})
+    assert status == 409
+    assert payload == {"error": "Audio disabled", "reason": "disabled"}
+
+
+def test_post_audio_install_default_failure_returns_server_error(
+    gui_server: int, fake_audio_service: _FakeAudioService
+) -> None:
+    fake_audio_service.raise_for["install_default_pack"] = AudioInstallError("download_failed", "network")
+    status, _headers, payload = _post_json(gui_server, "/audio/install-default", {})
+    assert status == 500
+    assert payload == {"error": "network", "reason": "download_failed"}
 
 
 def test_post_convert_success_returns_result(gui_server: int, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -135,6 +255,62 @@ def test_post_convert_handles_known_converter_errors(
     status, _headers, payload = _post_json(gui_server, "/convert", {"input": "C"})
     assert status == 200
     assert payload == {"error": "bad conversion"}
+
+
+def test_post_audio_play_note_calls_service(
+    gui_server: int, fake_audio_service: _FakeAudioService
+) -> None:
+    status, _headers, payload = _post_json(
+        gui_server,
+        "/audio/play-note",
+        {"midi": 60, "velocity": 110, "duration_ms": 320, "channel": 1},
+    )
+    assert status == 200
+    assert payload["ok"] is True
+    assert ("play_note", 60, 110, 320, 1) in fake_audio_service.calls
+
+
+def test_post_audio_play_note_returns_conflict_when_hq_unavailable(
+    gui_server: int, fake_audio_service: _FakeAudioService
+) -> None:
+    fake_audio_service.raise_for["play_note"] = AudioUnavailableError("missing_soundfont", "HQ unavailable")
+    status, _headers, payload = _post_json(gui_server, "/audio/play-note", {"midi": 60})
+    assert status == 409
+    assert payload == {"error": "HQ unavailable", "reason": "missing_soundfont"}
+
+
+def test_post_audio_play_note_validates_range(gui_server: int) -> None:
+    status, _headers, payload = _post_json(gui_server, "/audio/play-note", {"midi": 220})
+    assert status == 400
+    assert payload["reason"] == "validation"
+    assert "'midi' must be between 0 and 127" in payload["error"]
+
+
+def test_post_audio_note_on_validates_range(gui_server: int) -> None:
+    status, _headers, payload = _post_json(gui_server, "/audio/note-on", {"midi": -1})
+    assert status == 400
+    assert payload["reason"] == "validation"
+    assert "'midi' must be between 0 and 127" in payload["error"]
+
+
+def test_post_audio_note_off_validates_range(gui_server: int) -> None:
+    status, _headers, payload = _post_json(gui_server, "/audio/note-off", {"midi": 5, "channel": 99})
+    assert status == 400
+    assert payload["reason"] == "validation"
+    assert "'channel' must be between 0 and 15" in payload["error"]
+
+
+def test_post_audio_play_chord_validates_input(gui_server: int) -> None:
+    status, _headers, payload = _post_json(gui_server, "/audio/play-chord", {"midis": [60], "style": "arp"})
+    assert status == 400
+    assert payload["reason"] == "validation"
+    assert payload["error"] == "'style' must be 'block' or 'strum'"
+
+
+def test_post_audio_panic_requires_json_object(gui_server: int) -> None:
+    status, _headers, payload = _post_json(gui_server, "/audio/panic", ["not-object"])
+    assert status == 400
+    assert payload == {"error": "Expected JSON object"}
 
 
 def test_post_unknown_path_returns_404(gui_server: int) -> None:
