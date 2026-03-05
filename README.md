@@ -8,9 +8,18 @@ Talk to musicians the way musicians actually talk — in numbers. Throw in a cho
 
 ---
 
+## Documentation
+
+- [ROADMAP.md](ROADMAP.md)
+- [AGENTS.md](AGENTS.md)
+- [CLAUDE.md](CLAUDE.md)
+
+---
+
 ## Install
 
 ```bash
+# from an activated .venv
 pip install -e .
 ```
 
@@ -59,5 +68,5 @@ Key: REQUIRED
 ## Running tests
 
 ```bash
-pytest -q
+python -m pytest -q
 ```

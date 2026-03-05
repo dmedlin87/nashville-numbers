@@ -1565,12 +1565,48 @@ function addBuilderSep(sep) {
 function builderUndo() {
   if (builderTokens.length === 0) return;
   builderTokens.pop();
+  normalizeBuilderTokens();
   renderProgressionTrack();
 }
 
 function builderClear() {
   builderTokens = [];
   renderProgressionTrack();
+}
+
+function normalizeBuilderTokens() {
+  if (builderTokens.length === 0) return;
+
+  const normalized = [];
+  builderTokens.forEach(token => {
+    if (!token || (token.type !== 'chord' && token.type !== 'sep')) return;
+
+    const text = typeof token.text === 'string' ? token.text : '';
+    if (!text) return;
+
+    if (token.type === 'sep' && (normalized.length === 0 || normalized[normalized.length - 1].type === 'sep')) {
+      return;
+    }
+
+    normalized.push({ type: token.type, text });
+  });
+
+  if (normalized.length > 0 && normalized[normalized.length - 1].type === 'sep') {
+    normalized.pop();
+  }
+
+  builderTokens = normalized;
+}
+
+function ensureProgressionEmptyNode() {
+  let empty = document.getElementById('progEmpty');
+  if (empty) return empty;
+
+  empty = document.createElement('span');
+  empty.className = 'progression-empty';
+  empty.id = 'progEmpty';
+  empty.textContent = 'Pick a note below to start\u2026';
+  return empty;
 }
 
 function resetStage() {
@@ -1584,8 +1620,10 @@ function resetStage() {
 }
 
 function renderProgressionTrack() {
+  normalizeBuilderTokens();
+
   const track = document.getElementById('progressionTrack');
-  const empty = document.getElementById('progEmpty');
+  const empty = ensureProgressionEmptyNode();
 
   track.innerHTML = '';
 
@@ -1597,7 +1635,7 @@ function renderProgressionTrack() {
   }
 
   track.classList.add('has-items');
-  empty.style.display = 'none';
+  if (empty) empty.style.display = 'none';
 
   builderTokens.forEach((token, idx) => {
     const chip = document.createElement('span');
@@ -1615,6 +1653,7 @@ function renderProgressionTrack() {
     del.setAttribute('aria-label', 'Remove ' + token.text.trim());
     del.addEventListener('click', () => {
       builderTokens.splice(idx, 1);
+      normalizeBuilderTokens();
       renderProgressionTrack();
     });
     chip.appendChild(del);
