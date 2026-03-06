@@ -518,6 +518,43 @@ def test_panic_clears_scheduler_and_panics_engine(tmp_path: Path) -> None:
     assert engine.panic_calls == 1
 
 
+def test_play_sequence_clears_existing_queue_and_schedules_timed_events(tmp_path: Path) -> None:
+    soundfont = _soundfont_file(tmp_path)
+    service, _config_store, _installer, _runtime_installer, scheduler, engine_factory = _build_service(
+        tmp_path=tmp_path,
+        config={"enabled": True, "soundfont_path": str(soundfont)},
+    )
+    engine = engine_factory.instances[0]
+
+    service.play_sequence(
+        [
+            {"kind": "note", "delay_ms": 120, "midi": 64, "duration_ms": 250, "velocity": 101, "channel": 2},
+            {
+                "kind": "chord",
+                "delay_ms": 240,
+                "midis": [60, 64, 67],
+                "duration_ms": 900,
+                "velocity": 88,
+                "channel": 1,
+                "style": "block",
+                "strum_ms": 0,
+            },
+        ]
+    )
+
+    assert scheduler.clear_calls == 1
+    assert engine.panic_calls == 1
+    assert [call.delay_seconds for call in scheduler.calls[:2]] == [
+        pytest.approx(0.12),
+        pytest.approx(0.24),
+    ]
+
+    scheduler.run(0)
+    scheduler.run(1)
+
+    assert engine.note_on_calls == [(2, 64, 101), (1, 60, 88), (1, 64, 88), (1, 67, 88)]
+
+
 def test_shutdown_tears_down_engine_and_stops_scheduler(tmp_path: Path) -> None:
     soundfont = _soundfont_file(tmp_path)
     service, _config_store, _installer, _runtime_installer, scheduler, engine_factory = _build_service(

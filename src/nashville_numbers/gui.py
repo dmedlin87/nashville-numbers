@@ -15,6 +15,7 @@ from http.server import HTTPServer
 from .audio import get_audio_service
 from .converter import convert
 from .gui_http import build_handler
+from .music_lab import build_progression_plan
 
 MAX_INPUT_LENGTH = 1_000_000  # 1MB
 
@@ -51,6 +52,9 @@ class GuiApp:
 
     def convert_text(self, input_text: str) -> str:
         return convert(input_text)
+
+    def plan_arrangement(self, input_text: str, **kwargs: object) -> dict[str, object]:
+        return build_progression_plan(input_text, **kwargs)
 
     def get_max_input_length(self) -> int:
         return MAX_INPUT_LENGTH
@@ -114,6 +118,7 @@ class GuiApp:
             get_html=self.get_html,
             get_audio_service=self.get_audio_service,
             convert_text=self.convert_text,
+            plan_arrangement=self.plan_arrangement,
             get_max_input_length=self.get_max_input_length,
             runtime_install_job=self.runtime_install_job,
             runtime_install_lock=self.runtime_install_lock,
@@ -1338,6 +1343,536 @@ _HTML = r"""<!DOCTYPE html>
     border-color: var(--accent);
     color: var(--text);
   }
+
+  /* ── Music Lab ──────────────────────────────────────────────────────────── */
+  .music-lab-section {
+    margin-top: 1.9rem;
+    padding-top: 1.5rem;
+    border-top: 1px dashed var(--border);
+  }
+
+  .music-lab-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .music-lab-title {
+    font-size: clamp(1.15rem, 1.4vw, 1.45rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.3rem;
+  }
+
+  .music-lab-copy {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    max-width: 62ch;
+    line-height: 1.55;
+  }
+
+  .lab-pill-row {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .lab-pill {
+    border-radius: 999px;
+    border: 1px solid rgba(124, 92, 252, 0.32);
+    background: rgba(124, 92, 252, 0.1);
+    color: #d9d5ff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.35rem 0.72rem;
+  }
+
+  .music-lab-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.18fr);
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .lab-panel {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0)),
+      var(--surface2);
+    border: 1px solid rgba(124, 92, 252, 0.2);
+    border-radius: 14px;
+    padding: 1rem;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+
+  .lab-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .lab-stat {
+    border: 1px solid rgba(124, 92, 252, 0.16);
+    border-radius: 12px;
+    background: rgba(13, 13, 26, 0.36);
+    padding: 0.75rem 0.8rem;
+    min-height: 94px;
+  }
+
+  .lab-stat-label {
+    display: block;
+    font-size: 0.63rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.45rem;
+  }
+
+  .lab-stat-value {
+    display: block;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 0.25rem;
+  }
+
+  .lab-stat-copy {
+    display: block;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+  }
+
+  .lab-analysis {
+    margin-bottom: 1rem;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.55;
+  }
+
+  .lab-controls-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+    margin-bottom: 1rem;
+  }
+
+  .lab-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .lab-field-label {
+    font-size: 0.66rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .lab-input,
+  .lab-select {
+    width: 100%;
+    background: rgba(13, 13, 26, 0.5);
+    border: 1px solid rgba(124, 92, 252, 0.25);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 0.58rem 0.75rem;
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition);
+  }
+
+  .lab-input:focus,
+  .lab-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
+  }
+
+  .lab-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    border: 1px solid rgba(124, 92, 252, 0.22);
+    border-radius: 10px;
+    background: rgba(13, 13, 26, 0.46);
+    padding: 0.7rem 0.8rem;
+    margin-bottom: 1rem;
+  }
+
+  .lab-toggle-main {
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .lab-toggle-sub {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    font-weight: 500;
+    margin-top: 0.16rem;
+  }
+
+  .lab-toggle input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .groove-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+    margin-bottom: 1rem;
+  }
+
+  .groove-card {
+    border: 1px solid rgba(124, 92, 252, 0.18);
+    border-radius: 12px;
+    background: rgba(13, 13, 26, 0.36);
+    color: var(--text);
+    padding: 0.75rem;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition), background var(--transition);
+    font-family: inherit;
+  }
+
+  .groove-card:hover,
+  .groove-card:focus-visible {
+    border-color: rgba(124, 92, 252, 0.5);
+    background: rgba(124, 92, 252, 0.12);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+    outline: none;
+  }
+
+  .groove-card.active {
+    border-color: rgba(124, 92, 252, 0.72);
+    background: linear-gradient(135deg, rgba(124, 92, 252, 0.28), rgba(94, 61, 232, 0.16));
+    box-shadow: 0 12px 30px rgba(94, 61, 232, 0.18);
+  }
+
+  .groove-name {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 800;
+    margin-bottom: 0.22rem;
+  }
+
+  .groove-copy {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.73rem;
+    line-height: 1.45;
+  }
+
+  .transport-row {
+    display: flex;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .btn-transport {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    border-radius: 10px;
+    border: 1px solid rgba(124, 92, 252, 0.28);
+    padding: 0.65rem 0.95rem;
+    font-size: 0.84rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+  }
+
+  .btn-transport.primary {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 6px 22px rgba(124, 92, 252, 0.3);
+  }
+
+  .btn-transport.secondary {
+    background: rgba(13, 13, 26, 0.45);
+    color: var(--text);
+  }
+
+  .btn-transport.ghost {
+    background: transparent;
+    color: var(--text-muted);
+  }
+
+  .btn-transport:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(124, 92, 252, 0.55);
+  }
+
+  .btn-transport:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .lab-transport-status {
+    margin-top: 0.85rem;
+    border-radius: 11px;
+    border: 1px solid rgba(124, 92, 252, 0.16);
+    background: rgba(13, 13, 26, 0.46);
+    padding: 0.7rem 0.8rem;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+  }
+
+  .lab-transport-status.ready {
+    border-color: rgba(74, 222, 128, 0.35);
+    color: #bbf7d0;
+  }
+
+  .lab-transport-status.warn {
+    border-color: rgba(248, 113, 113, 0.4);
+    color: #fecaca;
+  }
+
+  .lab-transport-status.busy {
+    border-color: rgba(124, 92, 252, 0.4);
+    color: #ded9ff;
+  }
+
+  .timeline-shell {
+    min-height: 260px;
+  }
+
+  .arrangement-placeholder {
+    min-height: 240px;
+    border: 1px dashed rgba(124, 92, 252, 0.25);
+    border-radius: 14px;
+    background:
+      radial-gradient(circle at top right, rgba(124, 92, 252, 0.13), transparent 42%),
+      rgba(13, 13, 26, 0.4);
+    padding: 1rem;
+    color: var(--text-muted);
+    display: grid;
+    align-content: center;
+    gap: 0.55rem;
+  }
+
+  .arrangement-placeholder strong {
+    color: var(--text);
+    font-size: 0.98rem;
+  }
+
+  .arrangement-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .timeline-section {
+    border: 1px solid rgba(124, 92, 252, 0.18);
+    border-radius: 14px;
+    background: rgba(13, 13, 26, 0.34);
+    padding: 0.85rem;
+  }
+
+  .timeline-section-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.65rem;
+    align-items: baseline;
+    margin-bottom: 0.7rem;
+    flex-wrap: wrap;
+  }
+
+  .timeline-section-title {
+    font-size: 0.95rem;
+    font-weight: 800;
+  }
+
+  .timeline-section-copy {
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    font-weight: 600;
+  }
+
+  .timeline-bars {
+    display: grid;
+    gap: 0.65rem;
+  }
+
+  .timeline-bar {
+    border-radius: 12px;
+    border: 1px solid rgba(124, 92, 252, 0.12);
+    background: rgba(28, 28, 56, 0.72);
+    padding: 0.72rem;
+  }
+
+  .timeline-bar-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .timeline-bar-label {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .timeline-bar-preview {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: #d9d5ff;
+  }
+
+  .timeline-slot-row {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .timeline-slot {
+    width: 100%;
+    border-radius: 12px;
+    border: 1px solid rgba(124, 92, 252, 0.14);
+    background: rgba(13, 13, 26, 0.45);
+    color: var(--text);
+    padding: 0.72rem 0.78rem;
+    text-align: left;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+  }
+
+  .timeline-slot:hover,
+  .timeline-slot:focus-visible {
+    border-color: rgba(124, 92, 252, 0.55);
+    transform: translateY(-1px);
+    outline: none;
+  }
+
+  .timeline-slot.active {
+    border-color: rgba(124, 92, 252, 0.75);
+    background: rgba(124, 92, 252, 0.2);
+  }
+
+  .timeline-slot.is-playing {
+    border-color: rgba(74, 222, 128, 0.7);
+    background: rgba(74, 222, 128, 0.14);
+    box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.2);
+  }
+
+  .timeline-slot-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    align-items: baseline;
+    margin-bottom: 0.28rem;
+  }
+
+  .timeline-slot-chord {
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    font-weight: 800;
+  }
+
+  .timeline-slot-timing {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .timeline-slot-sub {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+  }
+
+  .runway-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-top: 0.95rem;
+  }
+
+  .runway-card {
+    border-radius: 12px;
+    border: 1px solid rgba(124, 92, 252, 0.16);
+    background: rgba(13, 13, 26, 0.36);
+    padding: 0.82rem;
+  }
+
+  .runway-label {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #c4b5fd;
+    margin-bottom: 0.35rem;
+  }
+
+  .runway-title {
+    display: block;
+    font-size: 0.88rem;
+    font-weight: 800;
+    margin-bottom: 0.22rem;
+  }
+
+  .runway-copy {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    line-height: 1.45;
+  }
+
+  @media (max-width: 1180px) {
+    .music-lab-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .lab-summary-grid,
+    .lab-controls-grid,
+    .groove-grid,
+    .runway-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .timeline-bar-top,
+    .timeline-section-head,
+    .timeline-slot-top,
+    .timeline-slot-sub {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1453,6 +1988,136 @@ _HTML = r"""<!DOCTYPE html>
       </div>
     </div>
 
+    <!-- Music Lab -->
+    <div class="music-lab-section" id="musicLabSection">
+      <div class="music-lab-header">
+        <div>
+          <div class="section-label">Music Lab</div>
+          <h2 class="music-lab-title">Progression sketchpad and transport</h2>
+          <p class="music-lab-copy">
+            First expansion slice from the NAM roadmap: map the chart into bars, choose a groove,
+            add a low-end guide, and audition a loop before live-input and tone-browser work lands.
+          </p>
+        </div>
+        <div class="lab-pill-row">
+          <span class="lab-pill">Pattern transport</span>
+          <span class="lab-pill">Bass guide</span>
+          <span class="lab-pill">Tone runway</span>
+        </div>
+      </div>
+
+      <div class="music-lab-grid">
+        <div class="lab-panel">
+          <div class="lab-summary-grid">
+            <div class="lab-stat">
+              <span class="lab-stat-label">Resolved Key</span>
+              <span class="lab-stat-value" id="labSummaryKey">No chart yet</span>
+              <span class="lab-stat-copy" id="labSummaryKeyCopy">Convert or build a progression to anchor the loop.</span>
+            </div>
+            <div class="lab-stat">
+              <span class="lab-stat-label">Loop Map</span>
+              <span class="lab-stat-value" id="labSummaryBars">0 bars</span>
+              <span class="lab-stat-copy" id="labSummaryBarsCopy">Bar and slot timing appear after planning.</span>
+            </div>
+            <div class="lab-stat">
+              <span class="lab-stat-label">Groove</span>
+              <span class="lab-stat-value" id="labSummaryGroove">Anthem Strum</span>
+              <span class="lab-stat-copy" id="labSummaryGrooveCopy">Wide downbeats and anchored roots.</span>
+            </div>
+            <div class="lab-stat">
+              <span class="lab-stat-label">Playback Path</span>
+              <span class="lab-stat-value" id="labSummaryRuntime">Web Tone</span>
+              <span class="lab-stat-copy" id="labSummaryRuntimeCopy">FluidSynth transport is used automatically when available.</span>
+            </div>
+          </div>
+
+          <div class="lab-analysis" id="labSummaryAnalysis">
+            The arrangement planner is idle. Build a chart to get section boundaries, harmonic rhythm,
+            and a transport-ready loop map.
+          </div>
+
+          <div class="lab-controls-grid">
+            <label class="lab-field">
+              <span class="lab-field-label">Tempo</span>
+              <input id="labTempo" class="lab-input" type="number" min="40" max="220" step="1" value="96" />
+            </label>
+            <label class="lab-field">
+              <span class="lab-field-label">Meter</span>
+              <select id="labMeter" class="lab-select">
+                <option value="4">4/4</option>
+                <option value="3">3/4</option>
+                <option value="6">6/8</option>
+                <option value="5">5/4</option>
+              </select>
+            </label>
+            <label class="lab-field">
+              <span class="lab-field-label">Count-In</span>
+              <select id="labCountIn" class="lab-select">
+                <option value="4">4 beats</option>
+                <option value="2">2 beats</option>
+                <option value="1">1 beat</option>
+                <option value="0">None</option>
+              </select>
+            </label>
+            <div class="lab-field">
+              <span class="lab-field-label">Runtime</span>
+              <div class="lab-analysis" style="margin:0">The active audio path follows the existing HQ or browser fallback stack.</div>
+            </div>
+          </div>
+
+          <label class="lab-toggle" for="labBassEnabled">
+            <span>
+              <span class="lab-toggle-main">Bass guide layer</span>
+              <span class="lab-toggle-sub">Sketch the low-end before the NAM/live-input layer exists.</span>
+            </span>
+            <input id="labBassEnabled" type="checkbox" checked />
+          </label>
+
+          <div class="section-label" style="margin-bottom:0.5rem">Groove Presets</div>
+          <div class="groove-grid" id="grooveGrid"></div>
+
+          <div class="transport-row">
+            <button class="btn-transport primary" id="arrangementBuildBtn" onclick="buildArrangement()">Build Arrangement</button>
+            <button class="btn-transport secondary" id="arrangementPlayBtn" onclick="playArrangement()" disabled>Play Loop</button>
+            <button class="btn-transport ghost" id="arrangementStopBtn" onclick="stopArrangement()">Stop</button>
+          </div>
+
+          <div class="lab-transport-status" id="labTransportStatus">
+            Waiting for a progression. The first implementation stage is a transport and arrangement planner on top of the current playback stack.
+          </div>
+        </div>
+
+        <div class="lab-panel timeline-shell">
+          <div class="section-label" style="margin-bottom:0.5rem">Arrangement Timeline</div>
+          <div id="arrangementTimeline" aria-live="polite">
+            <div class="arrangement-placeholder">
+              <strong>Build the first loop.</strong>
+              <span>The planner will resolve a key, split the progression into bars, and expose each chord slot as a playable timeline cell.</span>
+            </div>
+          </div>
+
+          <div class="section-label" style="margin:1rem 0 0.5rem">Expansion Runway</div>
+          <div class="runway-grid">
+            <div class="runway-card">
+              <span class="runway-label">Live Input</span>
+              <span class="runway-title">Practice Rig</span>
+              <span class="runway-copy">Use the same chart and fretboard targets as the future monitoring surface for real guitar or bass input.</span>
+            </div>
+            <div class="runway-card">
+              <span class="runway-label">Tone Browser</span>
+              <span class="runway-title">Tone Slots</span>
+              <span class="runway-copy">This transport is the place to hang starter tones, user-imported NAM captures, and section-specific tone swaps.</span>
+            </div>
+            <div class="runway-card">
+              <span class="runway-label">Export</span>
+              <span class="runway-title">Re-Amp Hand-Off</span>
+              <span class="runway-copy">The bar map and groove data are structured so stem export and later re-amp workflows can sit on top without re-parsing the chart.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Fretboard -->
     <div class="fretboard-section" id="fbSection">
       <div class="section-label">Fretboard Visualization</div>
@@ -1558,6 +2223,45 @@ function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+const MUSIC_LAB_GROOVES = {
+  anthem: {
+    id: 'anthem',
+    name: 'Anthem Strum',
+    description: 'Wide downbeats with anchored root pulses.',
+    chordStyle: 'strum',
+    strumMs: 24,
+    gate: 0.86,
+    bassPattern: 'downbeat-octave'
+  },
+  pulse: {
+    id: 'pulse',
+    name: 'Pulse Grid',
+    description: 'Block hits that keep every slot moving.',
+    chordStyle: 'block',
+    strumMs: 0,
+    gate: 0.66,
+    bassPattern: 'slot-roots'
+  },
+  lantern: {
+    id: 'lantern',
+    name: 'Lantern Pick',
+    description: 'Short picked stabs with a lighter bass bed.',
+    chordStyle: 'strum',
+    strumMs: 16,
+    gate: 0.52,
+    bassPattern: 'half-time'
+  },
+  pads: {
+    id: 'pads',
+    name: 'Cinema Pads',
+    description: 'Held chords for larger arrangement sketches.',
+    chordStyle: 'block',
+    strumMs: 0,
+    gate: 1.0,
+    bassPattern: 'bar-root'
+  }
+};
+
 let audioState = {
   hq_ready: false,
   engine: 'unavailable',
@@ -1567,6 +2271,14 @@ let audioState = {
   message: ''
 };
 let installInProgress = false;
+let musicLabState = {
+  selectedGroove: 'anthem',
+  plan: null,
+  playTimers: [],
+  isPlaying: false,
+  activeSlotKey: '',
+  lastBuiltInput: ''
+};
 
 const webTone = (() => {
   let ctx = null;
@@ -1706,6 +2418,7 @@ function updateAudioStatusUI() {
 
   installBtn.style.display = audioState.reason === 'missing_soundfont' ? '' : 'none';
   runtimeBtn.style.display = audioState.reason === 'missing_fluidsynth' ? '' : 'none';
+  refreshMusicLabRuntimeSummary();
 }
 
 async function refreshAudioStatus() {
@@ -1904,11 +2617,589 @@ function panicAudio() {
   if (audioState.hq_ready) _postAudio('/audio/panic', {});
 }
 
-function doConvert() {
+function getCurrentInputText() {
   const builderPanel = document.getElementById('panelBuilder');
-  const input = (builderPanel && builderPanel.style.display !== 'none')
+  return (builderPanel && builderPanel.style.display !== 'none')
     ? buildProgressionString()
     : document.getElementById('inputArea').value.trim();
+}
+
+function getMusicLabGroove(grooveId = musicLabState.selectedGroove) {
+  return MUSIC_LAB_GROOVES[grooveId] || MUSIC_LAB_GROOVES.anthem;
+}
+
+function setTransportStatus(message, mode = '') {
+  const status = document.getElementById('labTransportStatus');
+  if (!status) return;
+  status.textContent = message;
+  status.classList.remove('ready', 'warn', 'busy');
+  if (mode) status.classList.add(mode);
+}
+
+function syncArrangementButtons() {
+  const playBtn = document.getElementById('arrangementPlayBtn');
+  const stopBtn = document.getElementById('arrangementStopBtn');
+  if (playBtn) playBtn.disabled = !musicLabState.plan;
+  if (stopBtn) stopBtn.disabled = !musicLabState.isPlaying;
+}
+
+function refreshMusicLabRuntimeSummary() {
+  const runtimeValue = document.getElementById('labSummaryRuntime');
+  const runtimeCopy = document.getElementById('labSummaryRuntimeCopy');
+  if (!runtimeValue || !runtimeCopy) return;
+
+  if (audioState.hq_ready) {
+    runtimeValue.textContent = 'HQ Ready';
+    runtimeCopy.textContent = 'Sequence transport will use the FluidSynth backend.';
+    return;
+  }
+
+  if (audioState.reason === 'missing_fluidsynth') {
+    runtimeValue.textContent = 'Runtime Missing';
+    runtimeCopy.textContent = 'Browser transport is active until the FluidSynth runtime is installed.';
+    return;
+  }
+
+  if (audioState.reason === 'missing_soundfont') {
+    runtimeValue.textContent = 'HQ Pack Missing';
+    runtimeCopy.textContent = 'Install the free pack to hand the full loop to the backend.';
+    return;
+  }
+
+  runtimeValue.textContent = 'Web Tone';
+  runtimeCopy.textContent = 'Browser transport stays available when HQ playback is unavailable.';
+}
+
+function syncMusicLabSummary(plan = musicLabState.plan) {
+  const keyValue = document.getElementById('labSummaryKey');
+  const keyCopy = document.getElementById('labSummaryKeyCopy');
+  const barsValue = document.getElementById('labSummaryBars');
+  const barsCopy = document.getElementById('labSummaryBarsCopy');
+  const grooveValue = document.getElementById('labSummaryGroove');
+  const grooveCopy = document.getElementById('labSummaryGrooveCopy');
+  const analysis = document.getElementById('labSummaryAnalysis');
+
+  if (!keyValue || !keyCopy || !barsValue || !barsCopy || !grooveValue || !grooveCopy || !analysis) return;
+
+  const groove = getMusicLabGroove();
+  grooveValue.textContent = groove.name;
+  grooveCopy.textContent = groove.description;
+  refreshMusicLabRuntimeSummary();
+
+  if (!plan) {
+    keyValue.textContent = 'No chart yet';
+    keyCopy.textContent = 'Convert or build a progression to anchor the loop.';
+    barsValue.textContent = '0 bars';
+    barsCopy.textContent = 'Bar and slot timing appear after planning.';
+    analysis.textContent = 'The arrangement planner is idle. Build a chart to get section boundaries, harmonic rhythm, and a transport-ready loop map.';
+    syncArrangementButtons();
+    return;
+  }
+
+  keyValue.textContent = `${plan.resolved_key.tonic} ${plan.resolved_key.mode}`;
+  keyCopy.textContent = plan.analysis.resolved_via === 'best_guess'
+    ? 'Using the strongest inferred interpretation for the current chart.'
+    : plan.analysis.key_changes > 0
+      ? 'The chart includes section-level key changes.'
+      : 'Key came from the chart or the strongest explicit interpretation.';
+  barsValue.textContent = `${plan.summary.bar_count} bars / ${plan.summary.slot_count} slots`;
+  barsCopy.textContent = `${plan.meter_label} at ${plan.tempo} BPM with ${plan.count_in_beats} count-in beats.`;
+  analysis.textContent = plan.analysis.resolved_via === 'section_inference'
+    ? 'Sections were split by sustained key movement. Each lane below keeps its own harmonic center so later live-input and tone routing can follow the chart.'
+    : 'This first slice builds a playable transport lane on top of the existing converter and audio stack. Later NAM, live-input, and export features can attach to the same bar map.';
+  syncArrangementButtons();
+}
+
+function clearArrangementTimeline(title, body) {
+  const timeline = document.getElementById('arrangementTimeline');
+  if (!timeline) return;
+  timeline.innerHTML = `
+    <div class="arrangement-placeholder">
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(body)}</span>
+    </div>
+  `;
+}
+
+function renderGrooveOptions() {
+  const grid = document.getElementById('grooveGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  Object.values(MUSIC_LAB_GROOVES).forEach(groove => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'groove-card' + (musicLabState.selectedGroove === groove.id ? ' active' : '');
+    button.setAttribute('aria-pressed', musicLabState.selectedGroove === groove.id ? 'true' : 'false');
+    button.addEventListener('click', () => setMusicLabGroove(groove.id));
+
+    const name = document.createElement('span');
+    name.className = 'groove-name';
+    name.textContent = groove.name;
+
+    const copy = document.createElement('span');
+    copy.className = 'groove-copy';
+    copy.textContent = groove.description;
+
+    button.appendChild(name);
+    button.appendChild(copy);
+    grid.appendChild(button);
+  });
+}
+
+function setMusicLabGroove(grooveId) {
+  musicLabState.selectedGroove = MUSIC_LAB_GROOVES[grooveId] ? grooveId : 'anthem';
+  if (musicLabState.plan) {
+    musicLabState.plan.groove = getMusicLabGroove();
+  }
+  renderGrooveOptions();
+  syncMusicLabSummary();
+}
+
+function getPlanSlot(sectionIndex, barIndex, slotIndex) {
+  if (!musicLabState.plan) return null;
+  const section = musicLabState.plan.sections[sectionIndex];
+  if (!section) return null;
+  const bar = section.bars[barIndex];
+  if (!bar) return null;
+  return bar.slots[slotIndex] || null;
+}
+
+function slotKeyFromIndexes(sectionIndex, barIndex, slotIndex) {
+  return `${sectionIndex}:${barIndex}:${slotIndex}`;
+}
+
+function selectArrangementSlot(slotKey, playing = false) {
+  document.querySelectorAll('.timeline-slot').forEach(node => {
+    node.classList.toggle('active', node.dataset.slotKey === slotKey);
+    if (node.dataset.slotKey !== slotKey && !playing) node.classList.remove('is-playing');
+  });
+  musicLabState.activeSlotKey = slotKey;
+}
+
+function setArrangementPlayingSlot(slotKey, enabled) {
+  const node = document.querySelector(`.timeline-slot[data-slot-key="${slotKey}"]`);
+  if (!node) return;
+  node.classList.toggle('is-playing', enabled);
+  if (enabled) selectArrangementSlot(slotKey, true);
+}
+
+function slotToChordData(slot) {
+  return {
+    type: 'chord',
+    text: slot.chord,
+    root: extractChordRoot(slot.chord),
+    keyTonic: slot.key.tonic,
+    keyMode: slot.key.mode
+  };
+}
+
+function extractChordRoot(text) {
+  const match = String(text || '').match(/^[A-G](?:#|b)?/);
+  return match ? match[0] : null;
+}
+
+function renderArrangementTimeline() {
+  const timeline = document.getElementById('arrangementTimeline');
+  if (!timeline) return;
+
+  if (!musicLabState.plan) {
+    clearArrangementTimeline(
+      'Build the first loop.',
+      'The planner will resolve a key, split the progression into bars, and expose each chord slot as a playable timeline cell.'
+    );
+    return;
+  }
+
+  timeline.innerHTML = '';
+  const sectionsWrap = document.createElement('div');
+  sectionsWrap.className = 'arrangement-sections';
+
+  musicLabState.plan.sections.forEach((section, sectionIndex) => {
+    const sectionNode = document.createElement('div');
+    sectionNode.className = 'timeline-section';
+
+    const head = document.createElement('div');
+    head.className = 'timeline-section-head';
+
+    const title = document.createElement('div');
+    title.className = 'timeline-section-title';
+    title.textContent = `${section.label} • ${section.key.tonic} ${section.key.mode}`;
+
+    const copy = document.createElement('div');
+    copy.className = 'timeline-section-copy';
+    copy.textContent = section.analysis === 'section_inference'
+      ? 'Key-shifted lane'
+      : section.preview;
+
+    head.appendChild(title);
+    head.appendChild(copy);
+    sectionNode.appendChild(head);
+
+    const barsWrap = document.createElement('div');
+    barsWrap.className = 'timeline-bars';
+
+    section.bars.forEach((bar, barIndex) => {
+      const barNode = document.createElement('article');
+      barNode.className = 'timeline-bar';
+
+      const top = document.createElement('div');
+      top.className = 'timeline-bar-top';
+
+      const label = document.createElement('div');
+      label.className = 'timeline-bar-label';
+      label.textContent = `${bar.label} • ${bar.beats} beats`;
+
+      const preview = document.createElement('div');
+      preview.className = 'timeline-bar-preview';
+      preview.textContent = bar.preview;
+
+      top.appendChild(label);
+      top.appendChild(preview);
+      barNode.appendChild(top);
+
+      const slotRow = document.createElement('div');
+      slotRow.className = 'timeline-slot-row';
+      slotRow.style.gridTemplateColumns = `repeat(${Math.max(1, bar.slots.length)}, minmax(0, 1fr))`;
+
+      bar.slots.forEach((slot, slotIndex) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'timeline-slot';
+        button.dataset.slotKey = slotKeyFromIndexes(sectionIndex, barIndex, slotIndex);
+        button.addEventListener('click', () => previewArrangementSlot(sectionIndex, barIndex, slotIndex));
+
+        const topLine = document.createElement('div');
+        topLine.className = 'timeline-slot-top';
+
+        const chord = document.createElement('span');
+        chord.className = 'timeline-slot-chord';
+        chord.textContent = slot.chord;
+
+        const timing = document.createElement('span');
+        timing.className = 'timeline-slot-timing';
+        timing.textContent = `${slot.beat_duration} beats`;
+
+        topLine.appendChild(chord);
+        topLine.appendChild(timing);
+
+        const sub = document.createElement('div');
+        sub.className = 'timeline-slot-sub';
+        const nns = document.createElement('span');
+        nns.textContent = slot.nns || 'Chord input';
+        const key = document.createElement('span');
+        key.textContent = `${slot.key.tonic} ${slot.key.mode}`;
+        sub.appendChild(nns);
+        sub.appendChild(key);
+
+        button.appendChild(topLine);
+        button.appendChild(sub);
+        slotRow.appendChild(button);
+      });
+
+      barNode.appendChild(slotRow);
+      barsWrap.appendChild(barNode);
+    });
+
+    sectionNode.appendChild(barsWrap);
+    sectionsWrap.appendChild(sectionNode);
+  });
+
+  timeline.appendChild(sectionsWrap);
+
+  if (musicLabState.activeSlotKey) {
+    selectArrangementSlot(musicLabState.activeSlotKey);
+  }
+}
+
+async function buildArrangement(options = {}) {
+  const input = getCurrentInputText();
+  if (!input) {
+    stopArrangement({ silent: true });
+    musicLabState.plan = null;
+    musicLabState.lastBuiltInput = '';
+    musicLabState.activeSlotKey = '';
+    syncMusicLabSummary();
+    clearArrangementTimeline(
+      'Build the first loop.',
+      'Add a chart in Builder or Text mode to map bars, slot timing, and transport playback.'
+    );
+    setTransportStatus('Add a progression first.', 'warn');
+    return null;
+  }
+
+  stopArrangement({ silent: true });
+  const buildBtn = document.getElementById('arrangementBuildBtn');
+  if (buildBtn) buildBtn.disabled = true;
+  if (!options.silent) setTransportStatus('Building arrangement...', 'busy');
+
+  const payload = {
+    input,
+    tempo: parseInt(document.getElementById('labTempo').value || '96', 10),
+    meter: parseInt(document.getElementById('labMeter').value || '4', 10),
+    groove: musicLabState.selectedGroove,
+    count_in_beats: parseInt(document.getElementById('labCountIn').value || '4', 10),
+    bass_enabled: !!document.getElementById('labBassEnabled').checked
+  };
+
+  try {
+    const response = await fetch('/arrangement/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || 'Arrangement planning failed');
+
+    musicLabState.plan = body.plan;
+    musicLabState.plan.groove = getMusicLabGroove(body.plan.groove && body.plan.groove.id);
+    musicLabState.selectedGroove = musicLabState.plan.groove.id;
+    musicLabState.lastBuiltInput = input;
+    renderGrooveOptions();
+    syncMusicLabSummary();
+    renderArrangementTimeline();
+    setTransportStatus(
+      options.silent
+        ? 'Arrangement synced from the current chart. Press Play Loop to audition it.'
+        : 'Arrangement ready. Press Play Loop to audition it.',
+      'ready'
+    );
+    return musicLabState.plan;
+  } catch (err) {
+    musicLabState.plan = null;
+    musicLabState.activeSlotKey = '';
+    syncMusicLabSummary();
+    clearArrangementTimeline(
+      'Arrangement planning failed.',
+      String(err && err.message ? err.message : err)
+    );
+    setTransportStatus(String(err && err.message ? err.message : err), 'warn');
+    return null;
+  } finally {
+    if (buildBtn) buildBtn.disabled = false;
+    syncArrangementButtons();
+  }
+}
+
+function previewArrangementSlot(sectionIndex, barIndex, slotIndex) {
+  const slot = getPlanSlot(sectionIndex, barIndex, slotIndex);
+  if (!slot) return;
+
+  const slotKey = slotKeyFromIndexes(sectionIndex, barIndex, slotIndex);
+  selectArrangementSlot(slotKey);
+  const chordData = slotToChordData(slot);
+  focusMusicalObject(chordData);
+  const midis = getChordMidiNotes(chordData, { tonic: slot.key.tonic, mode: slot.key.mode });
+  if (midis.length > 0) {
+    playChordPreview(midis, 'strum', 24, 760, 96, 0);
+  }
+}
+
+function getChordBassValue(chord, key) {
+  const slash = String(chord.text || '').match(/\/([A-G](?:#|b)?)/);
+  if (slash) return getNoteValue(slash[1]);
+  return getChordRootValue(chord, key);
+}
+
+function getBassMidi(chord, key) {
+  let midi = 36 + getChordBassValue(chord, key);
+  while (midi > 52) midi -= 12;
+  while (midi < 28) midi += 12;
+  return midi;
+}
+
+function addBassEventsForSlot(events, slot, chordData, groove, startMs, beatMs) {
+  const key = { tonic: chordData.keyTonic, mode: chordData.keyMode };
+  const bassMidi = getBassMidi(chordData, key);
+  const shortMs = Math.max(140, Math.round(Math.min(slot.beat_duration * beatMs * 0.48, 340)));
+
+  if (groove.bassPattern === 'bar-root' && slot.beat_start !== 0) return;
+  if (groove.bassPattern === 'half-time' && slot.beat_start !== 0) return;
+
+  events.push({
+    kind: 'note',
+    delay_ms: startMs,
+    duration_ms: shortMs,
+    velocity: 86,
+    channel: 1,
+    midi: bassMidi
+  });
+
+  if (groove.bassPattern === 'downbeat-octave' && slot.beat_duration >= 2) {
+    events.push({
+      kind: 'note',
+      delay_ms: startMs + Math.round(beatMs * Math.min(2, slot.beat_duration / 2)),
+      duration_ms: shortMs,
+      velocity: 78,
+      channel: 1,
+      midi: Math.min(76, bassMidi + 12)
+    });
+  }
+}
+
+function buildArrangementSequence(plan) {
+  const groove = getMusicLabGroove(plan.groove && plan.groove.id);
+  const beatMs = 60000 / plan.tempo;
+  const events = [];
+  const highlights = [];
+
+  for (let beat = 0; beat < plan.count_in_beats; beat++) {
+    events.push({
+      kind: 'note',
+      delay_ms: Math.round(beat * beatMs),
+      duration_ms: 140,
+      velocity: beat === plan.count_in_beats - 1 ? 118 : 92,
+      channel: 0,
+      midi: beat === plan.count_in_beats - 1 ? 84 : 79
+    });
+  }
+
+  let cursorBeats = plan.count_in_beats;
+  plan.sections.forEach((section, sectionIndex) => {
+    section.bars.forEach((bar, barIndex) => {
+      const barStartBeats = cursorBeats;
+      bar.slots.forEach((slot, slotIndex) => {
+        const chordData = slotToChordData(slot);
+        const key = { tonic: slot.key.tonic, mode: slot.key.mode };
+        const midis = getChordMidiNotes(chordData, key);
+        if (midis.length === 0) return;
+
+        const startMs = Math.round((barStartBeats + slot.beat_start) * beatMs);
+        const durationMs = Math.max(180, Math.round(slot.beat_duration * beatMs * groove.gate));
+        events.push({
+          kind: 'chord',
+          delay_ms: startMs,
+          duration_ms: durationMs,
+          velocity: groove.id === 'lantern' ? 82 : 96,
+          channel: 0,
+          midis,
+          style: groove.chordStyle,
+          strum_ms: groove.strumMs
+        });
+
+        if (plan.bass_enabled) {
+          addBassEventsForSlot(events, slot, chordData, groove, startMs, beatMs);
+        }
+
+        highlights.push({
+          key: slotKeyFromIndexes(sectionIndex, barIndex, slotIndex),
+          delay_ms: startMs,
+          duration_ms: Math.max(220, durationMs)
+        });
+      });
+      cursorBeats += bar.beats;
+    });
+  });
+
+  return {
+    events,
+    highlights,
+    totalMs: Math.round((cursorBeats * beatMs) + 240)
+  };
+}
+
+function queueLocalSequence(events) {
+  events.forEach(event => {
+    const timer = window.setTimeout(() => {
+      if (event.kind === 'note') {
+        webTone.playNote(event.midi, event.velocity, event.duration_ms);
+        return;
+      }
+      webTone.playChord(event.midis, event.style, event.strum_ms || 0, event.duration_ms, event.velocity);
+    }, event.delay_ms);
+    musicLabState.playTimers.push(timer);
+  });
+}
+
+function finishArrangementPlayback() {
+  if (!musicLabState.isPlaying) return;
+  musicLabState.isPlaying = false;
+  document.querySelectorAll('.timeline-slot.is-playing').forEach(node => node.classList.remove('is-playing'));
+  syncArrangementButtons();
+  setTransportStatus('Loop finished. Press Play Loop again or keep editing the chart.', 'ready');
+}
+
+function scheduleArrangementHighlights(highlights, totalMs) {
+  highlights.forEach(item => {
+    musicLabState.playTimers.push(window.setTimeout(() => {
+      setArrangementPlayingSlot(item.key, true);
+    }, item.delay_ms));
+    musicLabState.playTimers.push(window.setTimeout(() => {
+      setArrangementPlayingSlot(item.key, false);
+    }, item.delay_ms + item.duration_ms));
+  });
+
+  musicLabState.playTimers.push(window.setTimeout(() => {
+    finishArrangementPlayback();
+  }, totalMs));
+}
+
+async function playArrangement() {
+  let plan = musicLabState.plan;
+  if (!plan || musicLabState.lastBuiltInput !== getCurrentInputText()) {
+    plan = await buildArrangement({ silent: true });
+    if (!plan) return;
+  }
+
+  stopArrangement({ silent: true });
+  const sequence = buildArrangementSequence(plan);
+  if (sequence.events.length === 0) {
+    setTransportStatus('No playable chord data was found in the current chart.', 'warn');
+    return;
+  }
+
+  musicLabState.isPlaying = true;
+  syncArrangementButtons();
+  scheduleArrangementHighlights(sequence.highlights, sequence.totalMs);
+
+  let usedBackend = false;
+  if (audioState.hq_ready) {
+    usedBackend = await _postAudio('/audio/play-sequence', {
+      events: sequence.events,
+      reset: true
+    });
+  }
+
+  if (!usedBackend) {
+    queueLocalSequence(sequence.events);
+    setTransportStatus(
+      audioState.hq_ready
+        ? 'HQ transport was unavailable, so playback switched to the browser fallback.'
+        : 'Browser transport is playing the arrangement loop.',
+      audioState.hq_ready ? 'warn' : 'busy'
+    );
+    return;
+  }
+
+  setTransportStatus('FluidSynth transport is playing the arrangement loop.', 'busy');
+}
+
+function stopArrangement(options = {}) {
+  musicLabState.playTimers.forEach(timer => window.clearTimeout(timer));
+  musicLabState.playTimers = [];
+  document.querySelectorAll('.timeline-slot.is-playing').forEach(node => node.classList.remove('is-playing'));
+  if (musicLabState.isPlaying) {
+    panicAudio();
+  }
+  musicLabState.isPlaying = false;
+  syncArrangementButtons();
+  if (!options.silent) {
+    setTransportStatus('Transport stopped.', 'ready');
+  }
+}
+
+function initMusicLab() {
+  renderGrooveOptions();
+  syncMusicLabSummary();
+  clearArrangementTimeline(
+    'Build the first loop.',
+    'The planner will resolve a key, split the progression into bars, and expose each chord slot as a playable timeline cell.'
+  );
+  syncArrangementButtons();
+}
+
+function doConvert() {
+  const input = getCurrentInputText();
   if (!input) return;
 
   const btn = document.getElementById('convertBtn');
@@ -1923,10 +3214,24 @@ function doConvert() {
   .then(data => {
     btn.classList.remove('loading');
     renderOutput(data);
+    if (!data.error) {
+      buildArrangement({ silent: true });
+    } else {
+      musicLabState.plan = null;
+      musicLabState.lastBuiltInput = '';
+      musicLabState.activeSlotKey = '';
+      syncMusicLabSummary();
+      clearArrangementTimeline('Convert the chart first.', 'The arrangement planner uses the current progression text and key context.');
+    }
   })
   .catch(err => {
     btn.classList.remove('loading');
     renderOutput({ error: String(err) });
+    musicLabState.plan = null;
+    musicLabState.lastBuiltInput = '';
+    musicLabState.activeSlotKey = '';
+    syncMusicLabSummary();
+    clearArrangementTimeline('Conversion failed.', String(err));
   });
 }
 
@@ -2015,6 +3320,7 @@ function copyResult(btn) {
 }
 
 function doClear() {
+  stopArrangement({ silent: true });
   builderClear();
   resetStage();
   const inputArea = document.getElementById('inputArea');
@@ -2030,6 +3336,15 @@ function doClear() {
   box.innerHTML = '<span class="output-placeholder">Result will appear here&hellip;</span>';
   document.getElementById('fbSection').classList.remove('active');
   selectedChord = null;
+  currentKey = { tonic: 'C', mode: 'Major' };
+  musicLabState.plan = null;
+  musicLabState.lastBuiltInput = '';
+  musicLabState.activeSlotKey = '';
+  syncMusicLabSummary();
+  clearArrangementTimeline(
+    'Build the first loop.',
+    'The planner will resolve a key, split the progression into bars, and expose each chord slot as a playable timeline cell.'
+  );
   panicAudio();
 }
 
@@ -2552,19 +3867,23 @@ function _syncFilterUI() {
   });
 }
 
-function highlightToken(tokenEl, data) {
-  document.querySelectorAll('.interactive-token').forEach(el => el.classList.remove('active-highlight'));
-  tokenEl.classList.add('active-highlight');
-
+function focusMusicalObject(data) {
   currentKey = { tonic: data.keyTonic, mode: data.keyMode };
   if (data.type === 'chord' || data.type === 'nns') {
     selectedChord = data;
     document.getElementById('viewModeSelect').value = 'chord';
+    document.getElementById('fbSection').classList.add('active');
   } else {
     selectedChord = null;
     document.getElementById('viewModeSelect').value = 'scale';
   }
   updateFretboard();
+}
+
+function highlightToken(tokenEl, data) {
+  document.querySelectorAll('.interactive-token').forEach(el => el.classList.remove('active-highlight'));
+  tokenEl.classList.add('active-highlight');
+  focusMusicalObject(data);
 }
 
 function handleTokenInteraction(tokenEl, data) {
@@ -2591,10 +3910,12 @@ window.addEventListener('resize', () => {
 // Init
 window.addEventListener('load', () => {
   initBuilder();
+  initMusicLab();
   refreshAudioStatus();
 });
 
 window.addEventListener('beforeunload', () => {
+  stopArrangement({ silent: true });
   panicAudio();
 });
 </script>

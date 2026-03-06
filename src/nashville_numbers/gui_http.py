@@ -17,6 +17,7 @@ def build_handler(
     get_html: Callable[[], str],
     get_audio_service: Callable[[], Any],
     convert_text: Callable[[str], str],
+    plan_arrangement: Callable[..., dict[str, Any]],
     get_max_input_length: Callable[[], int],
     runtime_install_job: dict[str, Any],
     runtime_install_lock: threading.Lock,
@@ -45,6 +46,9 @@ def build_handler(
             if parsed.path == "/convert":
                 self._handle_convert()
                 return
+            if parsed.path == "/arrangement/plan":
+                self._handle_arrangement_plan()
+                return
             if parsed.path == "/audio/install-default":
                 self._handle_audio_install_default()
                 return
@@ -59,6 +63,9 @@ def build_handler(
                 return
             if parsed.path == "/audio/play-chord":
                 self._handle_audio_play_chord()
+                return
+            if parsed.path == "/audio/play-sequence":
+                self._handle_audio_play_sequence()
                 return
             if parsed.path == "/audio/panic":
                 self._handle_audio_panic()
@@ -140,6 +147,43 @@ def build_handler(
                 self._send_json({"result": result})
             except (ValueError, KeyError, TypeError) as exc:
                 self._send_json({"error": str(exc)})
+
+        def _bool_field(self, payload: dict[str, Any], key: str, *, default: bool) -> bool:
+            value = payload.get(key, default)
+            if isinstance(value, bool):
+                return value
+            raise ValueError(f"'{key}' must be a boolean")
+
+        def _handle_arrangement_plan(self) -> None:
+            payload = self._read_json_payload()
+            if payload is None:
+                return
+            try:
+                input_text = str(payload.get("input", "")).strip()
+                if not input_text:
+                    self._send_json({"error": "Empty input"})
+                    return
+                tempo = self._int_field(payload, "tempo", minimum=40, maximum=220, default=96)
+                meter = self._int_field(payload, "meter", minimum=2, maximum=12, default=4)
+                count_in = self._int_field(payload, "count_in_beats", minimum=0, maximum=16, default=4)
+                groove = str(payload.get("groove", "anthem")).strip().lower() or "anthem"
+                bass_enabled = self._bool_field(payload, "bass_enabled", default=True)
+                plan = plan_arrangement(
+                    input_text,
+                    tempo=tempo,
+                    meter=meter,
+                    groove=groove,
+                    count_in_beats=count_in,
+                    bass_enabled=bass_enabled,
+                )
+                self._send_json({"plan": plan})
+            except ValueError as exc:
+                self._send_json({"error": str(exc), "reason": "validation"}, status=400)
+            except Exception as exc:
+                self._send_json(
+                    {"error": f"Failed to build arrangement: {exc}", "reason": "plan_failed"},
+                    status=500,
+                )
 
         def _handle_audio_install_default(self) -> None:
             payload = self._read_json_payload()
@@ -265,6 +309,91 @@ def build_handler(
             except Exception as exc:
                 self._send_json(
                     {"error": f"Audio chord playback failed: {exc}", "reason": "init_error"},
+                    status=500,
+                )
+
+        def _handle_audio_play_sequence(self) -> None:
+            payload = self._read_json_payload()
+            if payload is None:
+                return
+            try:
+                events_value = payload.get("events")
+                if not isinstance(events_value, list):
+                    raise ValueError("'events' must be an array")
+                if not (1 <= len(events_value) <= 512):
+                    raise ValueError("'events' must contain between 1 and 512 items")
+
+                events: list[dict[str, Any]] = []
+                for item in events_value:
+                    if not isinstance(item, dict):
+                        raise ValueError("Each event must be a JSON object")
+                    kind = str(item.get("kind", "")).strip().lower()
+                    delay_ms = self._int_field(item, "delay_ms", minimum=0, maximum=180000, default=0)
+                    duration_ms = self._int_field(
+                        item, "duration_ms", minimum=20, maximum=10000, default=700
+                    )
+                    velocity = self._int_field(item, "velocity", minimum=1, maximum=127, default=96)
+                    channel = self._int_field(item, "channel", minimum=0, maximum=15, default=0)
+
+                    if kind == "note":
+                        midi = self._int_field(item, "midi", minimum=0, maximum=127, required=True)
+                        events.append(
+                            {
+                                "kind": "note",
+                                "delay_ms": delay_ms,
+                                "duration_ms": duration_ms,
+                                "velocity": velocity,
+                                "channel": channel,
+                                "midi": midi,
+                            }
+                        )
+                        continue
+
+                    if kind == "chord":
+                        midis_value = item.get("midis")
+                        if not isinstance(midis_value, list):
+                            raise ValueError("'midis' must be an array of midi notes")
+                        if not (1 <= len(midis_value) <= 8):
+                            raise ValueError("'midis' must contain between 1 and 8 notes")
+                        midis = [
+                            self._int_field(
+                                {"midi": value}, "midi", minimum=0, maximum=127, required=True
+                            )
+                            for value in midis_value
+                        ]
+                        style = str(item.get("style", "strum")).strip().lower()
+                        if style not in {"block", "strum"}:
+                            raise ValueError("'style' must be 'block' or 'strum'")
+                        strum_ms = self._int_field(item, "strum_ms", minimum=0, maximum=120, default=28)
+                        events.append(
+                            {
+                                "kind": "chord",
+                                "delay_ms": delay_ms,
+                                "duration_ms": duration_ms,
+                                "velocity": velocity,
+                                "channel": channel,
+                                "midis": midis,
+                                "style": style,
+                                "strum_ms": strum_ms,
+                            }
+                        )
+                        continue
+
+                    raise ValueError("Each event 'kind' must be 'note' or 'chord'")
+
+                reset = self._bool_field(payload, "reset", default=True)
+                audio_service = get_audio_service()
+                audio_service.play_sequence(events, reset=reset)
+                self._send_json(
+                    {"ok": True, "queued": len(events), "reset": reset, "status": audio_service.status()}
+                )
+            except ValueError as exc:
+                self._send_json({"error": str(exc), "reason": "validation"}, status=400)
+            except AudioUnavailableError as exc:
+                self._send_json({"error": str(exc), "reason": exc.code}, status=409)
+            except Exception as exc:
+                self._send_json(
+                    {"error": f"Audio sequence playback failed: {exc}", "reason": "init_error"},
                     status=500,
                 )
 

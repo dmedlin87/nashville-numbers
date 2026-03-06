@@ -45,6 +45,18 @@ nns-gui
 
 Spins up a local server and pops open your browser automatically. No Electron, no npm, no drama — pure Python standard library.
 
+### Music Lab transport
+
+The GUI now includes a first-pass arrangement surface built from [`NAM_MUSIC_EXPANSION_IDEA.md`](NAM_MUSIC_EXPANSION_IDEA.md):
+
+- progression planning into bars and slots
+- groove presets for different playback feels
+- bass-guide layer toggles
+- transport playback that uses the existing HQ audio backend when available and falls back to browser audio otherwise
+- a timeline that stays linked to fretboard and chord preview interactions
+
+![Music Lab transport](content/music-lab-overview.png)
+
 ---
 
 ## CLI — fast and no-nonsense
