@@ -64,6 +64,29 @@ class GuiApp:
                 except OSError:
                     continue
         raise OSError(f"Unable to find an available port after 100 attempts (starting from {start})")
+
+    def create_http_server(self, port: int, handler_class: type) -> HTTPServer:
+        return HTTPServer(("127.0.0.1", port), handler_class)
+
+    def create_thread(
+        self, target: Callable[..., object], args: tuple[object, ...], *, daemon: bool
+    ) -> threading.Thread:
+        return threading.Thread(target=target, args=args, daemon=daemon)
+
+    def create_timer(self, interval: float, callback: Callable[[], object]) -> threading.Timer:
+        return threading.Timer(interval, callback)
+
+    def create_event(self) -> threading.Event:
+        return threading.Event()
+
+    def open_browser(self, url: str) -> None:
+        webbrowser.open(url)
+
+    def import_webview(self) -> object:
+        import webview
+
+        return webview
+
     def run_runtime_install(self) -> None:
         """Background worker that calls install_runtime() with progress updates."""
 
@@ -108,7 +131,7 @@ class GuiApp:
             pass
 
     def create_server(self, port: int) -> HTTPServer:
-        return HTTPServer(("127.0.0.1", port), self.get_handler_class())
+        return self.create_http_server(port, self.get_handler_class())
 
     def serve_server(self, server: HTTPServer) -> None:
         try:
@@ -119,13 +142,12 @@ class GuiApp:
     def start_server(self, port: int) -> tuple[HTTPServer, str, threading.Thread]:
         server = self.create_server(port)
         url = f"http://127.0.0.1:{port}"
-        server_thread = threading.Thread(target=self.serve_server, args=(server,), daemon=True)
+        server_thread = self.create_thread(self.serve_server, (server,), daemon=True)
         server_thread.start()
         return server, url, server_thread
 
     def open_native_window(self, url: str) -> None:
-        import webview
-
+        webview = self.import_webview()
         webview.create_window(
             "Nashville Numbers",
             url,
@@ -137,11 +159,11 @@ class GuiApp:
 
     def run_browser_fallback(self, url: str) -> None:
         print("Press Ctrl-C to stop.")
-        threading.Timer(0.3, lambda: webbrowser.open(url)).start()
+        self.create_timer(0.3, lambda: self.open_browser(url)).start()
 
         try:
             while True:
-                threading.Event().wait(3600)
+                self.create_event().wait(3600)
         except KeyboardInterrupt:
             print("\nStopped.")
 
