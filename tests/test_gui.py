@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import json
-import builtins
 import socket
 import threading
 import time
 from http.client import HTTPConnection
 import types
-import sys
 from typing import Any
 
 import pytest
@@ -512,14 +510,14 @@ def test_main_uses_native_window_when_webview_is_available(monkeypatch: pytest.M
     fake_server = FakeServer()
 
     monkeypatch.setattr(gui._DEFAULT_APP, "find_free_port", lambda: port)
-    monkeypatch.setattr(gui, "HTTPServer", lambda _addr, _handler: fake_server)
-    monkeypatch.setattr(gui.threading, "Thread", FakeThread)
+    monkeypatch.setattr(gui._DEFAULT_APP, "create_http_server", lambda _port, _handler: fake_server)
+    monkeypatch.setattr(gui._DEFAULT_APP, "create_thread", lambda target, args, daemon: FakeThread(target, args, daemon))
 
     fake_webview = types.SimpleNamespace(
         create_window=lambda *args, **kwargs: opened.append((args, kwargs)),
         start=lambda: webview_started.append(True),
     )
-    monkeypatch.setitem(sys.modules, "webview", fake_webview)
+    monkeypatch.setattr(gui._DEFAULT_APP, "import_webview", lambda: fake_webview)
 
     gui.main()
 
@@ -590,20 +588,16 @@ def test_main_falls_back_to_browser_when_webview_import_fails(
 
     fake_server = FakeServer()
     monkeypatch.setattr(gui._DEFAULT_APP, "find_free_port", lambda: port)
-    monkeypatch.setattr(gui, "HTTPServer", lambda _addr, _handler: fake_server)
-    monkeypatch.setattr(gui.threading, "Thread", FakeThread)
-    monkeypatch.setattr(gui.threading, "Timer", FakeTimer)
-    monkeypatch.setattr(gui.threading, "Event", lambda: FakeEvent())
-    monkeypatch.setattr(gui.webbrowser, "open", lambda url: opened_urls.append(url))
-
-    real_import = builtins.__import__
-
-    def fake_import(name: str, globals=None, locals=None, fromlist=(), level: int = 0):  # type: ignore[no-untyped-def]
-        if name == "webview":
-            raise ImportError("missing webview")
-        return real_import(name, globals, locals, fromlist, level)
-
-    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setattr(gui._DEFAULT_APP, "create_http_server", lambda _port, _handler: fake_server)
+    monkeypatch.setattr(gui._DEFAULT_APP, "create_thread", lambda target, args, daemon: FakeThread(target, args, daemon))
+    monkeypatch.setattr(gui._DEFAULT_APP, "create_timer", lambda _interval, callback: FakeTimer(_interval, callback))
+    monkeypatch.setattr(gui._DEFAULT_APP, "create_event", lambda: FakeEvent())
+    monkeypatch.setattr(gui._DEFAULT_APP, "open_browser", lambda url: opened_urls.append(url))
+    monkeypatch.setattr(
+        gui._DEFAULT_APP,
+        "import_webview",
+        lambda: (_ for _ in ()).throw(ImportError("missing webview")),
+    )
 
     gui.main()
 
@@ -663,13 +657,13 @@ def test_main_falls_back_to_browser_when_webview_runtime_fails(
         start=lambda: None,
     )
 
-    monkeypatch.setitem(sys.modules, "webview", fake_webview)
+    monkeypatch.setattr(gui._DEFAULT_APP, "import_webview", lambda: fake_webview)
     monkeypatch.setattr(gui._DEFAULT_APP, "find_free_port", lambda: port)
-    monkeypatch.setattr(gui, "HTTPServer", lambda _addr, _handler: FakeServer())
-    monkeypatch.setattr(gui.threading, "Thread", FakeThread)
-    monkeypatch.setattr(gui.threading, "Timer", FakeTimer)
-    monkeypatch.setattr(gui.threading, "Event", lambda: FakeEvent())
-    monkeypatch.setattr(gui.webbrowser, "open", lambda url: opened_urls.append(url))
+    monkeypatch.setattr(gui._DEFAULT_APP, "create_http_server", lambda _port, _handler: FakeServer())
+    monkeypatch.setattr(gui._DEFAULT_APP, "create_thread", lambda target, args, daemon: FakeThread(target, args, daemon))
+    monkeypatch.setattr(gui._DEFAULT_APP, "create_timer", lambda _interval, callback: FakeTimer(_interval, callback))
+    monkeypatch.setattr(gui._DEFAULT_APP, "create_event", lambda: FakeEvent())
+    monkeypatch.setattr(gui._DEFAULT_APP, "open_browser", lambda url: opened_urls.append(url))
 
     gui.main()
 
