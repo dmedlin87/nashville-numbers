@@ -46,6 +46,15 @@ class GuiApp:
     def get_initialized_audio_service(self) -> object | None:
         return self._audio_service
 
+    def get_html(self) -> str:
+        return _HTML
+
+    def convert_text(self, input_text: str) -> str:
+        return convert(input_text)
+
+    def get_max_input_length(self) -> int:
+        return MAX_INPUT_LENGTH
+
     def run_runtime_install(self) -> None:
         """Background worker that calls install_runtime() with progress updates."""
 
@@ -66,18 +75,14 @@ class GuiApp:
                     {"running": False, "pct": 0, "stage": "Failed", "error": str(exc), "result": None}
                 )
 
-    def build_handler_class(
-        self,
-        *,
-        get_html: Callable[[], str],
-        convert_text: Callable[[str], str],
-        get_max_input_length: Callable[[], int],
-    ) -> type:
+    def get_handler_class(self) -> type:
+        if self.handler_class is not None:
+            return self.handler_class
         self.handler_class = build_handler(
-            get_html=get_html,
+            get_html=self.get_html,
             get_audio_service=self.get_audio_service,
-            convert_text=convert_text,
-            get_max_input_length=get_max_input_length,
+            convert_text=self.convert_text,
+            get_max_input_length=self.get_max_input_length,
             runtime_install_job=self.runtime_install_job,
             runtime_install_lock=self.runtime_install_lock,
             run_runtime_install=self.run_runtime_install,
@@ -94,9 +99,7 @@ class GuiApp:
             pass
 
     def create_server(self, port: int) -> HTTPServer:
-        if self.handler_class is None:
-            raise RuntimeError("GUI handler class is not configured")
-        return HTTPServer(("127.0.0.1", port), self.handler_class)
+        return HTTPServer(("127.0.0.1", port), self.get_handler_class())
 
     def start_server(self, port: int) -> tuple[HTTPServer, str, threading.Thread]:
         server = self.create_server(port)
@@ -2517,24 +2520,7 @@ window.addEventListener('beforeunload', () => {
 """
 
 
-def _get_html() -> str:
-    return _HTML
-
-
-def _convert_text(input_text: str) -> str:
-    return convert(input_text)
-
-
-def _get_max_input_length() -> int:
-    return MAX_INPUT_LENGTH
-
-
 _DEFAULT_APP = GuiApp()
-_Handler = _DEFAULT_APP.build_handler_class(
-    get_html=_get_html,
-    convert_text=_convert_text,
-    get_max_input_length=_get_max_input_length,
-)
 
 
 # ---------------------------------------------------------------------------

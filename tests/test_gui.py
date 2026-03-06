@@ -102,7 +102,7 @@ class _FakeAudioService:
 
 @pytest.fixture
 def gui_server() -> int:
-    server = gui.HTTPServer(("127.0.0.1", 0), gui._Handler)
+    server = gui._DEFAULT_APP.create_server(0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     _host, port = server.server_address
@@ -163,6 +163,7 @@ def _poll_until_done(port: int, *, timeout: float = 3.0, interval: float = 0.05)
 def reset_runtime_install_job() -> None:
     """Reset the global job state before every test to prevent state leakage."""
     gui._DEFAULT_APP._audio_service = None
+    gui._DEFAULT_APP.handler_class = None
     with gui._DEFAULT_APP.runtime_install_lock:
         gui._DEFAULT_APP.runtime_install_job.update(
             {"running": False, "stage": "", "pct": 0, "result": None, "error": None}
@@ -174,6 +175,25 @@ def fake_audio_service(monkeypatch: pytest.MonkeyPatch) -> _FakeAudioService:
     service = _FakeAudioService()
     monkeypatch.setattr(gui._DEFAULT_APP, "_audio_service", service)
     return service
+
+
+def test_handler_class_is_built_lazily_and_cached(monkeypatch: pytest.MonkeyPatch) -> None:
+    built: list[dict[str, Any]] = []
+
+    class SentinelHandler:
+        pass
+
+    def fake_build_handler(**kwargs: Any) -> type:
+        built.append(kwargs)
+        return SentinelHandler
+
+    monkeypatch.setattr(gui, "build_handler", fake_build_handler)
+
+    assert built == []
+    assert gui._DEFAULT_APP.get_handler_class() is SentinelHandler
+    assert len(built) == 1
+    assert gui._DEFAULT_APP.get_handler_class() is SentinelHandler
+    assert len(built) == 1
 
 
 def test_get_root_serves_embedded_html(gui_server: int) -> None:
