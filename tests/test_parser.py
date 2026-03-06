@@ -69,6 +69,7 @@ def test_parse_input_key_extraction():
     parsed = parse_input("in C")
     assert parsed.key_tonic == "C"
     assert parsed.key_mode is None
+    assert parsed.progression_text == ""
 
     # key: Am
     parsed = parse_input("key: Am")
@@ -131,6 +132,7 @@ def test_parse_input_with_semicolon():
     assert parsed.key_tonic == "C"
     assert parsed.key_mode is None
     assert parsed.mode == "nns_to_chords"
+    assert parsed.progression_text == "1 4 5"
 
 def test_parse_input_mode_detection():
     # nns_to_chords (nns_hits > chord_hits)
@@ -158,6 +160,7 @@ def test_parse_input_text_preservation():
 def test_parse_input_empty():
     parsed = parse_input("")
     assert parsed.text == ""
+    assert parsed.progression_text == ""
     assert parsed.key_tonic is None
     assert parsed.key_mode is None
     assert parsed.mode == "chords_to_nns"
@@ -183,11 +186,13 @@ def test_parse_input_semicolon_newline():
     parsed = parse_input("key: G; 1 4 5")
     assert parsed.key_tonic == "G"
     assert parsed.mode == "nns_to_chords"
+    assert parsed.progression_text == "1 4 5"
 
     # Newline usage
     parsed = parse_input("1 4 5\nin C")
     assert parsed.key_tonic == "C"
     assert parsed.mode == "nns_to_chords"
+    assert parsed.progression_text == "1 4 5"
 
     # Text preservation
     assert parsed.text == "1 4 5\nin C"
@@ -200,3 +205,19 @@ def test_parse_input_tie_without_tonic():
     # tie with tonic
     parsed = parse_input("1 C in G")
     assert parsed.mode == "nns_to_chords"
+
+
+def test_parse_input_prefix_key_without_semicolon_preserves_progression() -> None:
+    parsed = parse_input("in C C F G")
+    assert parsed.key_tonic == "C"
+    assert parsed.key_mode is None
+    assert parsed.progression_text == "C F G"
+    assert parsed.mode == "chords_to_nns"
+
+
+def test_parse_input_nonterminal_in_clause_stays_in_progression() -> None:
+    parsed = parse_input("C in G F")
+    assert parsed.key_tonic is None
+    assert parsed.key_mode is None
+    assert parsed.progression_text == "C in G F"
+    assert parsed.mode == "chords_to_nns"
