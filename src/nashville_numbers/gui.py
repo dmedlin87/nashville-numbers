@@ -46,6 +46,47 @@ class GuiApp:
     def get_initialized_audio_service(self) -> object | None:
         return self._audio_service
 
+    def get_html(self) -> str:
+        return _HTML
+
+    def convert_text(self, input_text: str) -> str:
+        return convert(input_text)
+
+    def get_max_input_length(self) -> int:
+        return MAX_INPUT_LENGTH
+
+    def find_free_port(self, start: int = 8765) -> int:
+        for port in range(start, start + 100):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                try:
+                    sock.bind(("127.0.0.1", port))
+                    return port
+                except OSError:
+                    continue
+        raise OSError(f"Unable to find an available port after 100 attempts (starting from {start})")
+
+    def create_http_server(self, port: int, handler_class: type) -> HTTPServer:
+        return HTTPServer(("127.0.0.1", port), handler_class)
+
+    def create_thread(
+        self, target: Callable[..., object], args: tuple[object, ...], *, daemon: bool
+    ) -> threading.Thread:
+        return threading.Thread(target=target, args=args, daemon=daemon)
+
+    def create_timer(self, interval: float, callback: Callable[[], object]) -> threading.Timer:
+        return threading.Timer(interval, callback)
+
+    def create_event(self) -> threading.Event:
+        return threading.Event()
+
+    def open_browser(self, url: str) -> None:
+        webbrowser.open(url)
+
+    def import_webview(self) -> object:
+        import webview
+
+        return webview
+
     def run_runtime_install(self) -> None:
         """Background worker that calls install_runtime() with progress updates."""
 
@@ -66,18 +107,14 @@ class GuiApp:
                     {"running": False, "pct": 0, "stage": "Failed", "error": str(exc), "result": None}
                 )
 
-    def build_handler_class(
-        self,
-        *,
-        get_html: Callable[[], str],
-        convert_text: Callable[[str], str],
-        get_max_input_length: Callable[[], int],
-    ) -> type:
+    def get_handler_class(self) -> type:
+        if self.handler_class is not None:
+            return self.handler_class
         self.handler_class = build_handler(
-            get_html=get_html,
+            get_html=self.get_html,
             get_audio_service=self.get_audio_service,
-            convert_text=convert_text,
-            get_max_input_length=get_max_input_length,
+            convert_text=self.convert_text,
+            get_max_input_length=self.get_max_input_length,
             runtime_install_job=self.runtime_install_job,
             runtime_install_lock=self.runtime_install_lock,
             run_runtime_install=self.run_runtime_install,
@@ -94,20 +131,23 @@ class GuiApp:
             pass
 
     def create_server(self, port: int) -> HTTPServer:
-        if self.handler_class is None:
-            raise RuntimeError("GUI handler class is not configured")
-        return HTTPServer(("127.0.0.1", port), self.handler_class)
+        return self.create_http_server(port, self.get_handler_class())
+
+    def serve_server(self, server: HTTPServer) -> None:
+        try:
+            server.serve_forever()
+        except Exception:
+            pass
 
     def start_server(self, port: int) -> tuple[HTTPServer, str, threading.Thread]:
         server = self.create_server(port)
         url = f"http://127.0.0.1:{port}"
-        server_thread = threading.Thread(target=_start_server, args=(server,), daemon=True)
+        server_thread = self.create_thread(self.serve_server, (server,), daemon=True)
         server_thread.start()
         return server, url, server_thread
 
     def open_native_window(self, url: str) -> None:
-        import webview
-
+        webview = self.import_webview()
         webview.create_window(
             "Nashville Numbers",
             url,
@@ -119,11 +159,11 @@ class GuiApp:
 
     def run_browser_fallback(self, url: str) -> None:
         print("Press Ctrl-C to stop.")
-        threading.Timer(0.3, lambda: webbrowser.open(url)).start()
+        self.create_timer(0.3, lambda: self.open_browser(url)).start()
 
         try:
             while True:
-                threading.Event().wait(3600)
+                self.create_event().wait(3600)
         except KeyboardInterrupt:
             print("\nStopped.")
 
@@ -134,7 +174,7 @@ class GuiApp:
         server_thread.join(timeout=1.0)
 
     def run(self) -> None:
-        port = _find_free_port()
+        port = self.find_free_port()
         server, url, server_thread = self.start_server(port)
         print(f"Nashville Numbers GUI serving at {url}")
 
@@ -2563,47 +2603,12 @@ window.addEventListener('beforeunload', () => {
 """
 
 
-def _get_html() -> str:
-    return _HTML
-
-
-def _convert_text(input_text: str) -> str:
-    return convert(input_text)
-
-
-def _get_max_input_length() -> int:
-    return MAX_INPUT_LENGTH
-
-
 _DEFAULT_APP = GuiApp()
-_Handler = _DEFAULT_APP.build_handler_class(
-    get_html=_get_html,
-    convert_text=_convert_text,
-    get_max_input_length=_get_max_input_length,
-)
 
 
 # ---------------------------------------------------------------------------
 # Public entrypoint
 # ---------------------------------------------------------------------------
-
-def _find_free_port(start: int = 8765) -> int:
-    for port in range(start, start + 100):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(("127.0.0.1", port))
-                return port
-            except OSError:
-                continue
-    raise OSError(f"Unable to find an available port after 100 attempts (starting from {start})")
-
-
-def _start_server(server: HTTPServer) -> None:
-    try:
-        server.serve_forever()
-    except Exception:
-        pass
-
 
 def main() -> None:
     _DEFAULT_APP.run()
