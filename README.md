@@ -71,7 +71,7 @@ nns-convert "1m - b7 - 4m - 5(7) in A minor"
 
 Forget the key? You'll hear about it:
 
-```
+```text
 Key: REQUIRED
 ```
 
