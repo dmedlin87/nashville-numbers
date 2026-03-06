@@ -1369,8 +1369,8 @@ _HTML = r"""<!DOCTYPE html>
       <!-- Mode row -->
       <div class="mode-row">
         <div class="mode-toggle" role="group" aria-label="Conversion direction">
-          <button class="mode-btn active" id="modeChordsBtn" onclick="setBuilderMode('chords')">Chords &rarr; NNS</button>
-          <button class="mode-btn" id="modeNnsBtn" onclick="setBuilderMode('nns')">NNS &rarr; Chords</button>
+          <button class="mode-btn active" id="modeChordsBtn" aria-pressed="true" onclick="setBuilderMode('chords')">Chords &rarr; NNS</button>
+          <button class="mode-btn" id="modeNnsBtn" aria-pressed="false" onclick="setBuilderMode('nns')">NNS &rarr; Chords</button>
         </div>
         <div class="key-row" id="keyRow" style="display:none" aria-label="Key selection">
           <span class="key-label">Key</span>
@@ -1957,7 +1957,8 @@ function renderOutput(data) {
     const keyMode = (keyMatch && keyMatch[2].toLowerCase().startsWith('min')) ? "Minor" : "Major";
 
     html += `<div class="output-block">`;
-    html += `<span class="output-key interactive-token" onclick="handleTokenInteraction(this, {type:'key', keyTonic:'${keyTonic}', keyMode:'${keyMode}'})">${escapeHtml(keyLine)}</span>\n`;
+    const keyData = JSON.stringify({type:'key', keyTonic, keyMode}).replace(/"/g, '&quot;');
+    html += `<span class="output-key interactive-token" tabindex="0" role="button" onclick="handleTokenInteraction(this, ${keyData})" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); handleTokenInteraction(this, ${keyData}); }">${escapeHtml(keyLine)}</span>\n`;
 
     progressionLines.forEach(line => {
       const tokens = line.split(/(\s+|[-|,|\|]|\/)/);
@@ -1982,7 +1983,7 @@ function renderOutput(data) {
             keyMode
           }).replace(/"/g, '&quot;');
 
-          html += `<span class="output-progression interactive-token" onclick="handleTokenInteraction(this, ${dataJson})">${escapeHtml(token)}</span>`;
+          html += `<span class="output-progression interactive-token" tabindex="0" role="button" onclick="handleTokenInteraction(this, ${dataJson})" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); handleTokenInteraction(this, ${dataJson}); }">${escapeHtml(token)}</span>`;
         } else {
           html += escapeHtml(token);
         }
@@ -2170,8 +2171,12 @@ function switchInputTab(tab) {
 function setBuilderMode(mode) {
   builderMode = mode;
   const isChords = mode === 'chords';
-  document.getElementById('modeChordsBtn').classList.toggle('active', isChords);
-  document.getElementById('modeNnsBtn').classList.toggle('active', !isChords);
+  const chordsBtn = document.getElementById('modeChordsBtn');
+  const nnsBtn = document.getElementById('modeNnsBtn');
+  chordsBtn.classList.toggle('active', isChords);
+  chordsBtn.setAttribute('aria-pressed', isChords ? 'true' : 'false');
+  nnsBtn.classList.toggle('active', !isChords);
+  nnsBtn.setAttribute('aria-pressed', !isChords ? 'true' : 'false');
   document.getElementById('chordBuilder').style.display = isChords ? '' : 'none';
   document.getElementById('nnsBuilder').style.display = isChords ? 'none' : '';
   document.getElementById('keyRow').style.display = isChords ? 'none' : '';
