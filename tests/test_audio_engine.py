@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import builtins
+import os
 import sys
 import types
 from pathlib import Path
@@ -134,17 +134,39 @@ def test_engine_raises_when_fluidsynth_missing(monkeypatch: pytest.MonkeyPatch, 
     sf2 = tmp_path / "test.sf2"
     sf2.write_bytes(b"fake")
 
-    real_import = builtins.__import__
-
-    def fake_import(name: str, globals=None, locals=None, fromlist=(), level: int = 0):  # type: ignore[no-untyped-def]
-        if name == "fluidsynth":
-            raise ImportError("missing")
-        return real_import(name, globals, locals, fromlist, level)
-
-    monkeypatch.setattr(builtins, "__import__", fake_import)
-    monkeypatch.delitem(sys.modules, "fluidsynth", raising=False)
+    monkeypatch.setattr(
+        "nashville_numbers.audio.engine.import_fluidsynth_module",
+        lambda: (_ for _ in ()).throw(ImportError("missing")),
+    )
 
     with pytest.raises(AudioUnavailableError) as exc_info:
         FluidSynthEngine(sf2, quality={})
     assert exc_info.value.code == "missing_fluidsynth"
 
+
+def test_engine_import_tolerates_missing_windows_dll_hint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    if not hasattr(os, "add_dll_directory"):
+        pytest.skip("Windows-specific import behavior")
+
+    module_dir = tmp_path / "modules"
+    module_dir.mkdir()
+    (module_dir / "fluidsynth.py").write_text(
+        "import os\n"
+        "os.add_dll_directory(r'C:\\tools\\fluidsynth\\bin')\n"
+        "class Synth:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(module_dir))
+    monkeypatch.delitem(sys.modules, "fluidsynth", raising=False)
+
+    sf2 = tmp_path / "test.sf2"
+    sf2.write_bytes(b"fake")
+
+    try:
+        engine = FluidSynthEngine(sf2, quality={})
+        assert engine._fluidsynth.Synth is not None
+    finally:
+        monkeypatch.delitem(sys.modules, "fluidsynth", raising=False)

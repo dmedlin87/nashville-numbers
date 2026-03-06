@@ -38,11 +38,11 @@ Date: 2026-03-05
 
 ## Install and Run (Windows)
 
-1. Install FluidSynth runtime (system-level):
-   - `winget install FluidSynth.FluidSynth`
-   - fallback: `choco install fluidsynth -y`
-2. Install Python audio extras in repo venv:
+1. Install Python audio extras in repo venv:
    - `pip install -e ".[audio]"`
+2. Start the GUI and use the in-app `Install FluidSynth` action.
+   - The app now bootstraps a portable official Windows runtime under `~/.nashville_numbers/runtime/fluidsynth`.
+   - Manual fallback remains available with `choco install fluidsynth -y`.
 3. Verify:
    - `fluidsynth --version`
    - `python -c "import fluidsynth; print('pyfluidsynth ok')"`
@@ -92,10 +92,8 @@ Date: 2026-03-05
 
 - No backing track generator yet (explicitly deferred to phase 2).
 - FluidSynth runtime is not automatically installed by Python package install.
-- In-app runtime bootstrap for FluidSynth (especially Windows-first) is not implemented yet.
 
 ## Verification Snapshot
 
 - Command: `python -m pytest -q`
 - Result: `104 passed`
-

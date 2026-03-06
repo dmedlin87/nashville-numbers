@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -10,9 +11,22 @@ from nashville_numbers.audio.installer import RuntimeInstaller
 
 
 class TestRuntimeInstallerStatus:
+    @staticmethod
+    def _snapshot(runtime_ready: bool, runtime_path: str | None = None, library_path: str | None = None) -> dict[str, object]:
+        return {
+            "runtime_ready": runtime_ready,
+            "binary_path": runtime_path,
+            "library_path": library_path,
+            "bin_dirs": [],
+        }
+
     def test_status_returns_dict_with_expected_keys(self) -> None:
         installer = RuntimeInstaller()
-        result = installer.status()
+        with patch(
+            "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+            return_value=self._snapshot(False),
+        ):
+            result = installer.status()
         assert "runtime_binary" in result
         assert "python_binding" in result
         assert isinstance(result["runtime_binary"], bool)
@@ -20,13 +34,19 @@ class TestRuntimeInstallerStatus:
 
     def test_status_runtime_binary_false_when_not_on_path(self) -> None:
         installer = RuntimeInstaller()
-        with patch("shutil.which", return_value=None):
+        with patch(
+            "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+            return_value=self._snapshot(False),
+        ):
             result = installer.status()
         assert result["runtime_binary"] is False
 
     def test_status_runtime_binary_true_when_on_path(self) -> None:
         installer = RuntimeInstaller()
-        with patch("shutil.which", return_value="/usr/bin/fluidsynth"):
+        with patch(
+            "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+            return_value=self._snapshot(True, runtime_path="/usr/bin/fluidsynth"),
+        ):
             result = installer.status()
         assert result["runtime_binary"] is True
 
@@ -42,15 +62,62 @@ class TestRuntimeInstallerStatus:
             result = installer.status()
         assert result["python_binding"] is True
 
+    def test_status_detects_portable_runtime_library(self, tmp_path) -> None:
+        installer = RuntimeInstaller(root_dir=tmp_path)
+        runtime_dir = tmp_path / "runtime" / "fluidsynth" / "portable" / "bin"
+        runtime_dir.mkdir(parents=True)
+        (runtime_dir / "libfluidsynth-3.dll").write_bytes(b"dll")
+
+        with patch.object(installer, "_check_python_binding", return_value=False):
+            result = installer.status()
+
+        assert result["runtime_binary"] is True
+        assert result["library_path"] == str(runtime_dir / "libfluidsynth-3.dll")
+
+    def test_check_python_binding_ignores_missing_add_dll_directory(self, monkeypatch, tmp_path) -> None:
+        if not hasattr(os, "add_dll_directory"):
+            pytest.skip("Windows-specific import behavior")
+
+        installer = RuntimeInstaller(root_dir=tmp_path)
+        module_dir = tmp_path / "modules"
+        module_dir.mkdir()
+        (module_dir / "fluidsynth.py").write_text(
+            "import os\n"
+            "os.add_dll_directory(r'C:\\tools\\fluidsynth\\bin')\n"
+            "class Synth:\n"
+            "    pass\n",
+            encoding="utf-8",
+        )
+
+        monkeypatch.syspath_prepend(str(module_dir))
+        monkeypatch.delitem(sys.modules, "fluidsynth", raising=False)
+
+        try:
+            assert installer._check_python_binding() is True
+        finally:
+            monkeypatch.delitem(sys.modules, "fluidsynth", raising=False)
+
 
 class TestRuntimeInstallerInstall:
     def _make_installer(self) -> RuntimeInstaller:
         return RuntimeInstaller()
 
+    @staticmethod
+    def _snapshot(runtime_ready: bool, runtime_path: str | None = None, library_path: str | None = None) -> dict[str, object]:
+        return {
+            "runtime_ready": runtime_ready,
+            "binary_path": runtime_path,
+            "library_path": library_path,
+            "bin_dirs": [],
+        }
+
     def test_install_returns_ready_when_both_succeed(self) -> None:
         installer = self._make_installer()
         with (
-            patch("shutil.which", return_value="/usr/bin/fluidsynth"),
+            patch(
+                "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+                return_value=self._snapshot(True, runtime_path="/usr/bin/fluidsynth"),
+            ),
             patch.object(installer, "_check_python_binding", return_value=True),
         ):
             result = installer.install()
@@ -62,7 +129,10 @@ class TestRuntimeInstallerInstall:
     def test_install_skips_runtime_install_when_binary_already_present(self) -> None:
         installer = self._make_installer()
         with (
-            patch("shutil.which", return_value="/usr/bin/fluidsynth"),
+            patch(
+                "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+                return_value=self._snapshot(True, runtime_path="/usr/bin/fluidsynth"),
+            ),
             patch.object(installer, "_install_runtime", return_value=False) as mock_install,
             patch.object(installer, "_check_python_binding", return_value=True),
         ):
@@ -72,7 +142,13 @@ class TestRuntimeInstallerInstall:
     def test_install_attempts_runtime_install_when_binary_missing(self) -> None:
         installer = self._make_installer()
         with (
-            patch("shutil.which", return_value=None),
+            patch(
+                "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+                side_effect=[
+                    self._snapshot(False),
+                    self._snapshot(True, runtime_path="/portable/fluidsynth.exe"),
+                ],
+            ),
             patch.object(installer, "_install_runtime", return_value=True) as mock_install,
             patch.object(installer, "_check_python_binding", return_value=True),
             patch.object(installer, "_patch_windows_path"),
@@ -83,7 +159,10 @@ class TestRuntimeInstallerInstall:
     def test_install_calls_pip_when_binding_missing(self) -> None:
         installer = self._make_installer()
         with (
-            patch("shutil.which", return_value="/usr/bin/fluidsynth"),
+            patch(
+                "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+                return_value=self._snapshot(True, runtime_path="/usr/bin/fluidsynth"),
+            ),
             patch.object(installer, "_check_python_binding", return_value=False),
             patch.object(installer, "_install_python_binding", return_value=True) as mock_pip,
         ):
@@ -93,7 +172,10 @@ class TestRuntimeInstallerInstall:
     def test_install_returns_partial_result_when_runtime_fails(self) -> None:
         installer = self._make_installer()
         with (
-            patch("shutil.which", return_value=None),
+            patch(
+                "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+                side_effect=[self._snapshot(False), self._snapshot(False)],
+            ),
             patch.object(installer, "_install_runtime", return_value=False),
             patch.object(installer, "_check_python_binding", return_value=True),
         ):
@@ -105,7 +187,10 @@ class TestRuntimeInstallerInstall:
     def test_install_returns_partial_result_when_binding_fails(self) -> None:
         installer = self._make_installer()
         with (
-            patch("shutil.which", return_value="/usr/bin/fluidsynth"),
+            patch(
+                "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+                return_value=self._snapshot(True, runtime_path="/usr/bin/fluidsynth"),
+            ),
             patch.object(installer, "_check_python_binding", return_value=False),
             patch.object(installer, "_install_python_binding", return_value=False),
         ):
@@ -117,7 +202,10 @@ class TestRuntimeInstallerInstall:
     def test_install_message_ready(self) -> None:
         installer = self._make_installer()
         with (
-            patch("shutil.which", return_value="/usr/bin/fluidsynth"),
+            patch(
+                "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+                return_value=self._snapshot(True, runtime_path="/usr/bin/fluidsynth"),
+            ),
             patch.object(installer, "_check_python_binding", return_value=True),
         ):
             result = installer.install()
@@ -126,7 +214,10 @@ class TestRuntimeInstallerInstall:
     def test_install_message_when_both_fail(self) -> None:
         installer = self._make_installer()
         with (
-            patch("shutil.which", return_value=None),
+            patch(
+                "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+                side_effect=[self._snapshot(False), self._snapshot(False)],
+            ),
             patch.object(installer, "_install_runtime", return_value=False),
             patch.object(installer, "_check_python_binding", return_value=False),
             patch.object(installer, "_install_python_binding", return_value=False),
@@ -134,6 +225,22 @@ class TestRuntimeInstallerInstall:
             result = installer.install()
         assert result["ready"] is False
         assert len(result["message"]) > 0
+
+    def test_install_rechecks_binding_after_pip_install(self) -> None:
+        installer = self._make_installer()
+        with (
+            patch(
+                "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+                return_value=self._snapshot(True, runtime_path="/usr/bin/fluidsynth"),
+            ),
+            patch.object(installer, "_check_python_binding", side_effect=[False, False]),
+            patch.object(installer, "_install_python_binding", return_value=True) as mock_pip,
+        ):
+            result = installer.install()
+
+        mock_pip.assert_called_once()
+        assert result["python_binding"] is False
+        assert result["ready"] is False
 
     def test_on_progress_called_with_stages(self) -> None:
         installer = self._make_installer()
@@ -143,7 +250,10 @@ class TestRuntimeInstallerInstall:
             calls.append((pct, stage))
 
         with (
-            patch("shutil.which", return_value="/usr/bin/fluidsynth"),
+            patch(
+                "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+                return_value=self._snapshot(True, runtime_path="/usr/bin/fluidsynth"),
+            ),
             patch.object(installer, "_check_python_binding", return_value=True),
         ):
             installer.install(on_progress=cb)
@@ -160,7 +270,10 @@ class TestRuntimeInstallerInstall:
             raise RuntimeError("callback exploded")
 
         with (
-            patch("shutil.which", return_value="/usr/bin/fluidsynth"),
+            patch(
+                "nashville_numbers.audio.installer.prepare_fluidsynth_environment",
+                return_value=self._snapshot(True, runtime_path="/usr/bin/fluidsynth"),
+            ),
             patch.object(installer, "_check_python_binding", return_value=True),
         ):
             result = installer.install(on_progress=bad_cb)

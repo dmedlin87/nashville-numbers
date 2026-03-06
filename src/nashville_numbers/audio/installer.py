@@ -184,6 +184,8 @@ class RuntimeInstaller:
         if not runtime_ok:
             _progress(15, "Installing FluidSynth runtime…")
             runtime_ok = self._install_runtime(system, on_progress=_progress)
+            if runtime_ok and system == "Windows":
+                self._patch_windows_path()
             snapshot = prepare_fluidsynth_environment(self.root_dir)
             runtime_ok = bool(snapshot["runtime_ready"])
         else:
@@ -287,6 +289,9 @@ class RuntimeInstaller:
 
     def _install_python_binding(self) -> bool:
         return self._try_command([sys.executable, "-m", "pip", "install", "pyfluidsynth>=1.3"])
+
+    def _patch_windows_path(self) -> None:
+        prepare_fluidsynth_environment(self.root_dir)
 
     def _install_windows_portable(self, on_progress=None) -> bool:
         try:
