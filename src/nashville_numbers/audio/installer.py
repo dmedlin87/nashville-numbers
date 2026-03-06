@@ -1,9 +1,14 @@
-"""Download and install default free SoundFont packs."""
+"""Download and install default free SoundFont packs and FluidSynth runtime."""
 
 from __future__ import annotations
 
+import importlib
 import json
+import os
+import platform
 import shutil
+import subprocess
+import sys
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +16,12 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 from .errors import AudioInstallError
+
+# Known Windows locations where FluidSynth installers place the binary.
+_WINDOWS_FLUIDSYNTH_PATHS = [
+    r"C:\Program Files\FluidSynth\bin",
+    r"C:\Program Files (x86)\FluidSynth\bin",
+]
 
 
 @dataclass(frozen=True)
@@ -110,3 +121,123 @@ class DefaultPackInstaller:
         candidates = list(root.rglob(self.manifest.soundfont_file))
         return candidates[0] if candidates else None
 
+
+class RuntimeInstaller:
+    """Detects and installs the FluidSynth C runtime and pyfluidsynth binding."""
+
+    def status(self) -> dict[str, object]:
+        """Return current availability of runtime binary and Python binding."""
+        return {
+            "runtime_binary": shutil.which("fluidsynth") is not None,
+            "python_binding": self._check_python_binding(),
+        }
+
+    def install(self, on_progress=None) -> dict[str, object]:
+        """Attempt to install the FluidSynth runtime and pyfluidsynth.
+
+        Args:
+            on_progress: optional callable(pct: int, stage: str) called at key
+                         steps so callers can surface a progress indicator.
+
+        Returns a dict with keys:
+          - runtime_binary: bool  – runtime binary found after install attempt
+          - python_binding: bool  – pyfluidsynth importable after install attempt
+          - ready: bool           – both of the above are True
+          - message: str          – human-readable summary
+        """
+
+        def _progress(pct: int, stage: str) -> None:
+            if on_progress is not None:
+                try:
+                    on_progress(pct, stage)
+                except Exception:
+                    pass
+
+        _progress(5, "Checking current installation…")
+        system = platform.system()
+        runtime_ok = shutil.which("fluidsynth") is not None
+
+        if not runtime_ok:
+            _progress(15, "Installing FluidSynth runtime…")
+            runtime_ok = self._install_runtime(system)
+            if runtime_ok and system == "Windows":
+                _progress(48, "Configuring runtime paths…")
+                self._patch_windows_path()
+        else:
+            _progress(40, "Runtime already installed")
+
+        _progress(50, "Checking Python binding…")
+        binding_ok = self._check_python_binding()
+        if not binding_ok:
+            _progress(60, "Installing Python binding (pip)…")
+            binding_ok = self._install_python_binding()
+            if binding_ok:
+                importlib.invalidate_caches()
+
+        ready = runtime_ok and binding_ok
+        _progress(100, "Done" if ready else "Finished with errors")
+
+        if ready:
+            message = "FluidSynth runtime and Python binding are ready."
+        elif runtime_ok and not binding_ok:
+            message = "Runtime installed but Python binding (pyfluidsynth) could not be installed automatically."
+        elif not runtime_ok and binding_ok:
+            message = "Python binding ready but FluidSynth runtime could not be installed automatically. Install it manually and restart the app."
+        else:
+            message = "Could not install FluidSynth automatically. Install manually then restart the app."
+
+        return {
+            "runtime_binary": runtime_ok,
+            "python_binding": binding_ok,
+            "ready": ready,
+            "message": message,
+        }
+
+    def _check_python_binding(self) -> bool:
+        try:
+            importlib.import_module("fluidsynth")
+            return True
+        except Exception:
+            return False
+
+    def _install_runtime(self, system: str) -> bool:
+        if system == "Windows":
+            return self._try_windows()
+        if system == "Darwin":
+            return self._try_command(["brew", "install", "fluid-synth"])
+        # Linux: try common package managers
+        for cmd in (
+            ["apt-get", "install", "-y", "fluidsynth"],
+            ["dnf", "install", "-y", "fluid-synth"],
+            ["pacman", "-S", "--noconfirm", "fluidsynth"],
+        ):
+            if shutil.which(cmd[0]) and self._try_command(cmd):
+                return True
+        return False
+
+    def _try_windows(self) -> bool:
+        if shutil.which("winget") and self._try_command([
+            "winget", "install", "-e", "--id", "FluidSynth.FluidSynth",
+            "--accept-package-agreements", "--accept-source-agreements",
+        ]):
+            return True
+        if shutil.which("choco") and self._try_command(["choco", "install", "fluidsynth", "-y"]):
+            return True
+        return False
+
+    def _try_command(self, cmd: list[str]) -> bool:
+        try:
+            result = subprocess.run(cmd, capture_output=True, timeout=180)
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            return False
+
+    def _install_python_binding(self) -> bool:
+        return self._try_command([sys.executable, "-m", "pip", "install", "pyfluidsynth>=1.3"])
+
+    def _patch_windows_path(self) -> None:
+        """Extend PATH with known Windows FluidSynth bin dirs so ctypes can load the DLL."""
+        current = os.environ.get("PATH", "")
+        additions = [p for p in _WINDOWS_FLUIDSYNTH_PATHS if os.path.isdir(p) and p not in current]
+        if additions:
+            os.environ["PATH"] = os.pathsep.join(additions) + os.pathsep + current

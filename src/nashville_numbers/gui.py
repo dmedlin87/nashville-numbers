@@ -6,18 +6,149 @@ No external dependencies required – uses only the standard library.
 
 from __future__ import annotations
 
-import json
 import socket
 import threading
 import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import urlparse
+from collections.abc import Callable
+from http.server import HTTPServer
 
-from .audio import AudioInstallError, AudioUnavailableError, get_audio_service
+from .audio import get_audio_service
 from .converter import convert
+from .gui_http import build_handler
 
 MAX_INPUT_LENGTH = 1_000_000  # 1MB
-AUDIO_SERVICE = get_audio_service()
+
+def _new_runtime_install_job() -> dict[str, object]:
+    return {
+        "running": False,
+        "stage": "",
+        "pct": 0,
+        "result": None,
+        "error": None,
+    }
+
+
+class GuiApp:
+    """Stateful container for the embedded GUI runtime."""
+
+    def __init__(self, *, audio_service_factory: Callable[[], object] = get_audio_service) -> None:
+        self._audio_service_factory = audio_service_factory
+        self._audio_service: object | None = None
+        self.runtime_install_job = _new_runtime_install_job()
+        self.runtime_install_lock = threading.Lock()
+        self.handler_class: type | None = None
+
+    def get_audio_service(self) -> object:
+        if self._audio_service is None:
+            self._audio_service = self._audio_service_factory()
+        return self._audio_service
+
+    def get_initialized_audio_service(self) -> object | None:
+        return self._audio_service
+
+    def run_runtime_install(self) -> None:
+        """Background worker that calls install_runtime() with progress updates."""
+
+        def on_progress(pct: int, stage: str) -> None:
+            with self.runtime_install_lock:
+                self.runtime_install_job["pct"] = pct
+                self.runtime_install_job["stage"] = stage
+
+        try:
+            result = self.get_audio_service().install_runtime(on_progress=on_progress)
+            with self.runtime_install_lock:
+                self.runtime_install_job.update(
+                    {"running": False, "pct": 100, "stage": "Done", "result": result, "error": None}
+                )
+        except Exception as exc:
+            with self.runtime_install_lock:
+                self.runtime_install_job.update(
+                    {"running": False, "pct": 0, "stage": "Failed", "error": str(exc), "result": None}
+                )
+
+    def build_handler_class(
+        self,
+        *,
+        get_html: Callable[[], str],
+        convert_text: Callable[[str], str],
+        get_max_input_length: Callable[[], int],
+    ) -> type:
+        self.handler_class = build_handler(
+            get_html=get_html,
+            get_audio_service=self.get_audio_service,
+            convert_text=convert_text,
+            get_max_input_length=get_max_input_length,
+            runtime_install_job=self.runtime_install_job,
+            runtime_install_lock=self.runtime_install_lock,
+            run_runtime_install=self.run_runtime_install,
+        )
+        return self.handler_class
+
+    def panic_audio(self) -> None:
+        service = self.get_initialized_audio_service()
+        if service is None:
+            return
+        try:
+            service.panic()
+        except Exception:
+            pass
+
+    def create_server(self, port: int) -> HTTPServer:
+        if self.handler_class is None:
+            raise RuntimeError("GUI handler class is not configured")
+        return HTTPServer(("127.0.0.1", port), self.handler_class)
+
+    def start_server(self, port: int) -> tuple[HTTPServer, str, threading.Thread]:
+        server = self.create_server(port)
+        url = f"http://127.0.0.1:{port}"
+        server_thread = threading.Thread(target=_start_server, args=(server,), daemon=True)
+        server_thread.start()
+        return server, url, server_thread
+
+    def open_native_window(self, url: str) -> None:
+        import webview
+
+        webview.create_window(
+            "Nashville Numbers",
+            url,
+            width=1440,
+            height=900,
+            min_size=(680, 540),
+        )
+        webview.start()
+
+    def run_browser_fallback(self, url: str) -> None:
+        print("Press Ctrl-C to stop.")
+        threading.Timer(0.3, lambda: webbrowser.open(url)).start()
+
+        try:
+            while True:
+                threading.Event().wait(3600)
+        except KeyboardInterrupt:
+            print("\nStopped.")
+
+    def cleanup(self, server: HTTPServer, server_thread: threading.Thread) -> None:
+        self.panic_audio()
+        server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=1.0)
+
+    def run(self) -> None:
+        port = _find_free_port()
+        server, url, server_thread = self.start_server(port)
+        print(f"Nashville Numbers GUI serving at {url}")
+
+        try:
+            self.open_native_window(url)
+        except (ImportError, Exception) as exc:
+            if isinstance(exc, ImportError):
+                print("pywebview not installed. Falling back to default browser.")
+            else:
+                print(f"Failed to start native window: {exc}. Falling back to default browser.")
+            self.run_browser_fallback(url)
+        finally:
+            self.cleanup(server, server_thread)
+
 
 # ---------------------------------------------------------------------------
 # HTML template – embedded so the GUI is a single self-contained module.
@@ -526,6 +657,38 @@ _HTML = r"""<!DOCTYPE html>
   .audio-install-btn.loading {
     opacity: 0.65;
     pointer-events: none;
+  }
+
+  .audio-progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .audio-progress-track {
+    width: 110px;
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 2px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .audio-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), #a78bfa);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  .audio-progress-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .fb-group {
@@ -1278,6 +1441,15 @@ _HTML = r"""<!DOCTYPE html>
 
         <div class="audio-status">
           <span id="audioStatusPill" class="audio-status-pill warn" aria-live="polite">Web Tone Fallback</span>
+          <div id="runtimeProgressWrap" class="audio-progress-wrap" style="display:none" aria-live="polite" aria-label="Installation progress">
+            <div class="audio-progress-track">
+              <div id="runtimeProgressFill" class="audio-progress-fill"></div>
+            </div>
+            <span id="runtimeProgressLabel" class="audio-progress-label">Starting…</span>
+          </div>
+          <button id="audioRuntimeInstallBtn" class="audio-install-btn" onclick="installRuntime()" style="display:none">
+            Install FluidSynth
+          </button>
           <button id="audioInstallBtn" class="audio-install-btn" onclick="installDefaultPack()" style="display:none">
             Install Free HQ Pack
           </button>
@@ -1443,7 +1615,8 @@ function _setAudioState(nextState) {
 function updateAudioStatusUI() {
   const pill = document.getElementById('audioStatusPill');
   const installBtn = document.getElementById('audioInstallBtn');
-  if (!pill || !installBtn) return;
+  const runtimeBtn = document.getElementById('audioRuntimeInstallBtn');
+  if (!pill || !installBtn || !runtimeBtn) return;
 
   pill.classList.remove('ready', 'warn');
 
@@ -1451,6 +1624,7 @@ function updateAudioStatusUI() {
     pill.classList.add('ready');
     pill.textContent = 'HQ Ready';
     installBtn.style.display = 'none';
+    runtimeBtn.style.display = 'none';
     return;
   }
 
@@ -1466,6 +1640,7 @@ function updateAudioStatusUI() {
   }
 
   installBtn.style.display = audioState.reason === 'missing_soundfont' ? '' : 'none';
+  runtimeBtn.style.display = audioState.reason === 'missing_fluidsynth' ? '' : 'none';
 }
 
 async function refreshAudioStatus() {
@@ -1516,6 +1691,72 @@ async function installDefaultPack() {
   } finally {
     btn.classList.remove('loading');
     installInProgress = false;
+  }
+}
+
+let runtimeInstallInProgress = false;
+let _runtimePollTimer = null;
+
+function _updateRuntimeProgress(pct, stage) {
+  const fill = document.getElementById('runtimeProgressFill');
+  const label = document.getElementById('runtimeProgressLabel');
+  if (fill) fill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+  if (label) label.textContent = stage || '';
+}
+
+function _runtimeInstallFinished(result, error) {
+  clearTimeout(_runtimePollTimer);
+  runtimeInstallInProgress = false;
+  const progressWrap = document.getElementById('runtimeProgressWrap');
+  if (progressWrap) progressWrap.style.display = 'none';
+  if (result && result.audio_status) {
+    _setAudioState(result.audio_status);
+  }
+  // updateAudioStatusUI re-evaluates which buttons to show
+}
+
+function _pollRuntimeInstall() {
+  _runtimePollTimer = window.setTimeout(async () => {
+    try {
+      const resp = await fetch('/audio/install-runtime/status');
+      const job = await resp.json();
+      _updateRuntimeProgress(job.pct || 0, job.stage || '');
+      if (job.running) {
+        _pollRuntimeInstall();
+      } else {
+        _runtimeInstallFinished(job.result, job.error);
+      }
+    } catch (_err) {
+      _runtimeInstallFinished(null, 'Polling error');
+    }
+  }, 800);
+}
+
+async function installRuntime() {
+  if (runtimeInstallInProgress) return;
+  const btn = document.getElementById('audioRuntimeInstallBtn');
+  const progressWrap = document.getElementById('runtimeProgressWrap');
+  if (!btn || !progressWrap) return;
+
+  runtimeInstallInProgress = true;
+  btn.style.display = 'none';
+  progressWrap.style.display = 'flex';
+  _updateRuntimeProgress(0, 'Starting…');
+
+  try {
+    const response = await fetch('/audio/install-runtime', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.started) {
+      _runtimeInstallFinished(null, payload.reason || 'Failed to start');
+      return;
+    }
+    _pollRuntimeInstall();
+  } catch (_err) {
+    _runtimeInstallFinished(null, 'Network error');
   }
 }
 
@@ -2276,231 +2517,24 @@ window.addEventListener('beforeunload', () => {
 """
 
 
-# ---------------------------------------------------------------------------
-# HTTP request handler
-# ---------------------------------------------------------------------------
+def _get_html() -> str:
+    return _HTML
 
-class _Handler(BaseHTTPRequestHandler):
-    """Minimal request handler serving the single-page app and a JSON API."""
 
-    def log_message(self, format: str, *args: object) -> None:  # silence access logs
-        pass
+def _convert_text(input_text: str) -> str:
+    return convert(input_text)
 
-    def do_GET(self) -> None:
-        parsed = urlparse(self.path)
-        if parsed.path in ("/", "/index.html"):
-            self._send_html(_HTML)
-        elif parsed.path == "/audio/status":
-            self._send_json(AUDIO_SERVICE.status())
-        else:
-            self._send_json({"error": "not found"}, status=404)
 
-    def do_POST(self) -> None:
-        parsed = urlparse(self.path)
-        if parsed.path == "/convert":
-            self._handle_convert()
-            return
-        if parsed.path == "/audio/install-default":
-            self._handle_audio_install_default()
-            return
-        if parsed.path == "/audio/play-note":
-            self._handle_audio_play_note()
-            return
-        if parsed.path == "/audio/note-on":
-            self._handle_audio_note_on()
-            return
-        if parsed.path == "/audio/note-off":
-            self._handle_audio_note_off()
-            return
-        if parsed.path == "/audio/play-chord":
-            self._handle_audio_play_chord()
-            return
-        if parsed.path == "/audio/panic":
-            self._handle_audio_panic()
-            return
-        self._send_json({"error": "not found"}, status=404)
+def _get_max_input_length() -> int:
+    return MAX_INPUT_LENGTH
 
-    def _send_html(self, html: str) -> None:
-        data = html.encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
 
-    def _send_json(self, obj: dict, status: int = 200) -> None:
-        data = json.dumps(obj).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
-
-    def _read_json_payload(self) -> dict | None:
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-        except ValueError:
-            self._send_json({"error": "Invalid Content-Length header"}, status=400)
-            return None
-        if length > MAX_INPUT_LENGTH:
-            self._send_json({"error": "Payload too large"}, status=413)
-            return None
-        body = self.rfile.read(length) if length > 0 else b"{}"
-        try:
-            payload = json.loads(body)
-        except json.JSONDecodeError:
-            self._send_json({"error": "Invalid JSON in request body"}, status=400)
-            return None
-        if not isinstance(payload, dict):
-            self._send_json({"error": "Expected JSON object"}, status=400)
-            return None
-        return payload
-
-    def _int_field(
-        self,
-        payload: dict,
-        key: str,
-        *,
-        minimum: int,
-        maximum: int,
-        default: int | None = None,
-        required: bool = False,
-    ) -> int:
-        value = payload.get(key, default)
-        if value is None and required:
-            raise ValueError(f"'{key}' is required")
-        if value is None:
-            raise ValueError(f"'{key}' is required")
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"'{key}' must be an integer") from exc
-        if parsed < minimum or parsed > maximum:
-            raise ValueError(f"'{key}' must be between {minimum} and {maximum}")
-        return parsed
-
-    def _handle_convert(self) -> None:
-        payload = self._read_json_payload()
-        if payload is None:
-            return
-        try:
-            input_text = str(payload.get("input", "")).strip()
-            if not input_text:
-                self._send_json({"error": "Empty input"})
-                return
-            result = convert(input_text)
-            self._send_json({"result": result})
-        except (ValueError, KeyError, TypeError) as exc:
-            self._send_json({"error": str(exc)})
-
-    def _handle_audio_install_default(self) -> None:
-        payload = self._read_json_payload()
-        if payload is None:
-            return
-        try:
-            status = AUDIO_SERVICE.install_default_pack()
-            self._send_json({"status": status})
-        except AudioUnavailableError as exc:
-            self._send_json({"error": str(exc), "reason": exc.code}, status=409)
-        except AudioInstallError as exc:
-            self._send_json({"error": str(exc), "reason": exc.code}, status=500)
-        except Exception as exc:
-            self._send_json({"error": f"Failed to install pack: {exc}", "reason": "install_failed"}, status=500)
-
-    def _handle_audio_play_note(self) -> None:
-        payload = self._read_json_payload()
-        if payload is None:
-            return
-        try:
-            midi = self._int_field(payload, "midi", minimum=0, maximum=127, required=True)
-            velocity = self._int_field(payload, "velocity", minimum=1, maximum=127, default=96)
-            duration_ms = self._int_field(payload, "duration_ms", minimum=20, maximum=5000, default=450)
-            channel = self._int_field(payload, "channel", minimum=0, maximum=15, default=0)
-            AUDIO_SERVICE.play_note(midi, velocity=velocity, duration_ms=duration_ms, channel=channel)
-            self._send_json({"ok": True, "status": AUDIO_SERVICE.status()})
-        except ValueError as exc:
-            self._send_json({"error": str(exc), "reason": "validation"}, status=400)
-        except AudioUnavailableError as exc:
-            self._send_json({"error": str(exc), "reason": exc.code}, status=409)
-        except Exception as exc:
-            self._send_json({"error": f"Audio playback failed: {exc}", "reason": "init_error"}, status=500)
-
-    def _handle_audio_note_on(self) -> None:
-        payload = self._read_json_payload()
-        if payload is None:
-            return
-        try:
-            midi = self._int_field(payload, "midi", minimum=0, maximum=127, required=True)
-            velocity = self._int_field(payload, "velocity", minimum=1, maximum=127, default=96)
-            channel = self._int_field(payload, "channel", minimum=0, maximum=15, default=0)
-            AUDIO_SERVICE.note_on(midi, velocity=velocity, channel=channel)
-            self._send_json({"ok": True, "status": AUDIO_SERVICE.status()})
-        except ValueError as exc:
-            self._send_json({"error": str(exc), "reason": "validation"}, status=400)
-        except AudioUnavailableError as exc:
-            self._send_json({"error": str(exc), "reason": exc.code}, status=409)
-        except Exception as exc:
-            self._send_json({"error": f"Audio note_on failed: {exc}", "reason": "init_error"}, status=500)
-
-    def _handle_audio_note_off(self) -> None:
-        payload = self._read_json_payload()
-        if payload is None:
-            return
-        try:
-            midi = self._int_field(payload, "midi", minimum=0, maximum=127, required=True)
-            channel = self._int_field(payload, "channel", minimum=0, maximum=15, default=0)
-            AUDIO_SERVICE.note_off(midi, channel=channel)
-            self._send_json({"ok": True, "status": AUDIO_SERVICE.status()})
-        except ValueError as exc:
-            self._send_json({"error": str(exc), "reason": "validation"}, status=400)
-        except AudioUnavailableError as exc:
-            self._send_json({"error": str(exc), "reason": exc.code}, status=409)
-        except Exception as exc:
-            self._send_json({"error": f"Audio note_off failed: {exc}", "reason": "init_error"}, status=500)
-
-    def _handle_audio_play_chord(self) -> None:
-        payload = self._read_json_payload()
-        if payload is None:
-            return
-        try:
-            midis_value = payload.get("midis")
-            if not isinstance(midis_value, list):
-                raise ValueError("'midis' must be an array of midi notes")
-            if not (1 <= len(midis_value) <= 8):
-                raise ValueError("'midis' must contain between 1 and 8 notes")
-            midis = [self._int_field({"midi": value}, "midi", minimum=0, maximum=127, required=True) for value in midis_value]
-            style = str(payload.get("style", "strum")).strip().lower()
-            if style not in {"block", "strum"}:
-                raise ValueError("'style' must be 'block' or 'strum'")
-            strum_ms = self._int_field(payload, "strum_ms", minimum=5, maximum=120, default=28)
-            note_ms = self._int_field(payload, "note_ms", minimum=50, maximum=5000, default=700)
-            velocity = self._int_field(payload, "velocity", minimum=1, maximum=127, default=96)
-            channel = self._int_field(payload, "channel", minimum=0, maximum=15, default=0)
-            AUDIO_SERVICE.play_chord(
-                midis,
-                style=style,
-                strum_ms=strum_ms,
-                note_ms=note_ms,
-                velocity=velocity,
-                channel=channel,
-            )
-            self._send_json({"ok": True, "status": AUDIO_SERVICE.status()})
-        except ValueError as exc:
-            self._send_json({"error": str(exc), "reason": "validation"}, status=400)
-        except AudioUnavailableError as exc:
-            self._send_json({"error": str(exc), "reason": exc.code}, status=409)
-        except Exception as exc:
-            self._send_json({"error": f"Audio chord playback failed: {exc}", "reason": "init_error"}, status=500)
-
-    def _handle_audio_panic(self) -> None:
-        payload = self._read_json_payload()
-        if payload is None:
-            return
-        try:
-            AUDIO_SERVICE.panic()
-            self._send_json({"ok": True, "status": AUDIO_SERVICE.status()})
-        except Exception as exc:
-            self._send_json({"error": f"Audio panic failed: {exc}", "reason": "init_error"}, status=500)
+_DEFAULT_APP = GuiApp()
+_Handler = _DEFAULT_APP.build_handler_class(
+    get_html=_get_html,
+    convert_text=_convert_text,
+    get_max_input_length=_get_max_input_length,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -2526,53 +2560,7 @@ def _start_server(server: HTTPServer) -> None:
 
 
 def main() -> None:
-    port = _find_free_port()
-    server = HTTPServer(("127.0.0.1", port), _Handler)
-    url = f"http://127.0.0.1:{port}"
-    print(f"Nashville Numbers GUI serving at {url}")
-
-    # Run the HTTP server in a background thread
-    server_thread = threading.Thread(target=_start_server, args=(server,), daemon=True)
-    server_thread.start()
-
-    try:
-        import webview
-
-        # Open as a native desktop application window
-        webview.create_window(
-            "Nashville Numbers",
-            url,
-            width=1440,
-            height=900,
-            min_size=(680, 540)
-        )
-        webview.start()
-
-    except (ImportError, Exception) as e:
-        if isinstance(e, ImportError):
-            print("pywebview not installed. Falling back to default browser.")
-        else:
-            print(f"Failed to start native window: {e}. Falling back to default browser.")
-        print("Press Ctrl-C to stop.")
-
-        # Open browser after a short delay so the server is ready
-        threading.Timer(0.3, lambda: webbrowser.open(url)).start()
-
-        try:
-            # Block the main thread to keep the daemon server thread alive
-            while True:
-                threading.Event().wait(3600)
-        except KeyboardInterrupt:
-            print("\nStopped.")
-
-    finally:
-        try:
-            AUDIO_SERVICE.panic()
-        except Exception:
-            pass
-        server.shutdown()
-        server.server_close()
-        server_thread.join(timeout=1.0)
+    _DEFAULT_APP.run()
 
 
 if __name__ == "__main__":

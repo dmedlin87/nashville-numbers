@@ -9,7 +9,7 @@ from typing import Any
 from .config import AudioConfigStore
 from .engine import FluidSynthEngine
 from .errors import AudioInstallError, AudioUnavailableError
-from .installer import DefaultPackInstaller
+from .installer import DefaultPackInstaller, RuntimeInstaller
 from .scheduler import EventScheduler
 
 
@@ -22,12 +22,14 @@ class AudioService:
         installer: DefaultPackInstaller | None = None,
         engine_factory: type[FluidSynthEngine] = FluidSynthEngine,
         scheduler: EventScheduler | None = None,
+        runtime_installer: RuntimeInstaller | None = None,
     ) -> None:
         self._lock = threading.RLock()
         self._config_store = config_store or AudioConfigStore()
         self._installer = installer or DefaultPackInstaller(self._config_store.root_dir)
         self._engine_factory = engine_factory
         self._scheduler = scheduler or EventScheduler()
+        self._runtime_installer = runtime_installer or RuntimeInstaller()
         self._engine: FluidSynthEngine | None = None
         self._status: dict[str, Any] = {
             "hq_ready": False,
@@ -93,6 +95,27 @@ class AudioService:
         config["soundfont_path"] = str(soundfont_path)
         self._config_store.save(config)
         return self.refresh()
+
+    def install_runtime(self, on_progress=None) -> dict[str, Any]:
+        """Install FluidSynth runtime binary and pyfluidsynth, then refresh the engine.
+
+        Args:
+            on_progress: optional callable(pct: int, stage: str) forwarded to
+                         RuntimeInstaller so callers can surface progress updates.
+        """
+        result = self._runtime_installer.install(on_progress=on_progress)
+        if result.get("python_binding"):
+            if on_progress is not None:
+                try:
+                    on_progress(92, "Starting audio engine…")
+                except Exception:
+                    pass
+            self.refresh()
+        return {**result, "audio_status": self.status()}
+
+    def runtime_status(self) -> dict[str, Any]:
+        """Return current FluidSynth runtime availability without attempting any install."""
+        return dict(self._runtime_installer.status())
 
     def play_note(self, midi: int, velocity: int = 96, duration_ms: int = 450, channel: int = 0) -> None:
         with self._lock:
