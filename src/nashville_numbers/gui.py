@@ -611,6 +611,7 @@ _HTML = r"""<!DOCTYPE html>
     align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .audio-status-pill {
@@ -634,6 +635,13 @@ _HTML = r"""<!DOCTYPE html>
     border-color: rgba(248, 113, 113, 0.45);
     color: #fecaca;
     background: rgba(248, 113, 113, 0.08);
+  }
+
+  .audio-status-detail {
+    width: 100%;
+    font-size: 0.73rem;
+    color: var(--text-muted);
+    text-align: right;
   }
 
   .audio-install-btn {
@@ -1441,6 +1449,7 @@ _HTML = r"""<!DOCTYPE html>
 
         <div class="audio-status">
           <span id="audioStatusPill" class="audio-status-pill warn" aria-live="polite">Web Tone Fallback</span>
+          <span id="audioStatusDetail" class="audio-status-detail" aria-live="polite"></span>
           <div id="runtimeProgressWrap" class="audio-progress-wrap" style="display:none" aria-live="polite" aria-label="Installation progress">
             <div class="audio-progress-track">
               <div id="runtimeProgressFill" class="audio-progress-fill"></div>
@@ -1514,7 +1523,8 @@ let audioState = {
   engine: 'unavailable',
   reason: 'init_error',
   fallback: 'web_tone',
-  pack: { id: 'fluidr3_gm', installed: false, path: null }
+  pack: { id: 'fluidr3_gm', installed: false, path: null },
+  message: ''
 };
 let installInProgress = false;
 
@@ -1607,22 +1617,25 @@ function _setAudioState(nextState) {
     engine: nextState.engine || 'unavailable',
     reason: nextState.reason || 'init_error',
     fallback: nextState.fallback || 'web_tone',
-    pack: nextState.pack || { id: 'fluidr3_gm', installed: false, path: null }
+    pack: nextState.pack || { id: 'fluidr3_gm', installed: false, path: null },
+    message: nextState.message || ''
   };
   updateAudioStatusUI();
 }
 
 function updateAudioStatusUI() {
   const pill = document.getElementById('audioStatusPill');
+  const detail = document.getElementById('audioStatusDetail');
   const installBtn = document.getElementById('audioInstallBtn');
   const runtimeBtn = document.getElementById('audioRuntimeInstallBtn');
-  if (!pill || !installBtn || !runtimeBtn) return;
+  if (!pill || !detail || !installBtn || !runtimeBtn) return;
 
   pill.classList.remove('ready', 'warn');
 
   if (audioState.hq_ready) {
     pill.classList.add('ready');
     pill.textContent = 'HQ Ready';
+    detail.textContent = audioState.message || 'FluidSynth engine is active.';
     installBtn.style.display = 'none';
     runtimeBtn.style.display = 'none';
     return;
@@ -1637,6 +1650,18 @@ function updateAudioStatusUI() {
     pill.textContent = 'Audio Disabled';
   } else {
     pill.textContent = 'Web Tone Fallback';
+  }
+
+  if (audioState.message) {
+    detail.textContent = audioState.message;
+  } else if (audioState.reason === 'missing_soundfont') {
+    detail.textContent = 'Install the free HQ pack to enable FluidSynth playback.';
+  } else if (audioState.reason === 'missing_fluidsynth') {
+    detail.textContent = 'Install the FluidSynth runtime. The app can bootstrap a portable copy on Windows.';
+  } else if (audioState.reason === 'disabled') {
+    detail.textContent = 'Audio is disabled in the local configuration.';
+  } else {
+    detail.textContent = 'Browser tone preview remains available.';
   }
 
   installBtn.style.display = audioState.reason === 'missing_soundfont' ? '' : 'none';
@@ -1674,19 +1699,24 @@ async function installDefaultPack() {
           engine: 'unavailable',
           reason: payload.reason,
           fallback: 'web_tone',
-          pack: audioState.pack
+          pack: audioState.pack,
+          message: payload.error || 'Failed to install the default pack.'
         });
       }
       return;
     }
-    _setAudioState(payload.status || payload);
+    _setAudioState({
+      ...(payload.status || payload),
+      message: 'Free HQ pack installed.'
+    });
   } catch (_err) {
     _setAudioState({
       hq_ready: false,
       engine: 'unavailable',
       reason: 'init_error',
       fallback: 'web_tone',
-      pack: audioState.pack
+      pack: audioState.pack,
+      message: 'Failed to contact the local audio installer.'
     });
   } finally {
     btn.classList.remove('loading');
@@ -1710,9 +1740,16 @@ function _runtimeInstallFinished(result, error) {
   const progressWrap = document.getElementById('runtimeProgressWrap');
   if (progressWrap) progressWrap.style.display = 'none';
   if (result && result.audio_status) {
-    _setAudioState(result.audio_status);
+    _setAudioState({
+      ...result.audio_status,
+      message: result.message || ''
+    });
+    return;
   }
-  // updateAudioStatusUI re-evaluates which buttons to show
+  _setAudioState({
+    ...audioState,
+    message: error || 'FluidSynth installation did not complete.'
+  });
 }
 
 function _pollRuntimeInstall() {
@@ -1774,7 +1811,8 @@ async function _postAudio(endpoint, payload) {
         engine: 'unavailable',
         reason: body.reason || 'init_error',
         fallback: 'web_tone',
-        pack: audioState.pack
+        pack: audioState.pack,
+        message: body.error || ''
       });
       return false;
     }

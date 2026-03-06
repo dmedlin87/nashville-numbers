@@ -7,6 +7,7 @@ from threading import RLock
 from typing import Any
 
 from .errors import AudioUnavailableError
+from .runtime_support import import_fluidsynth_module
 
 
 class FluidSynthEngine:
@@ -23,7 +24,7 @@ class FluidSynthEngine:
     @staticmethod
     def _import_fluidsynth() -> Any:
         try:
-            import fluidsynth  # type: ignore[import-not-found]
+            fluidsynth = import_fluidsynth_module()
         except Exception as exc:
             raise AudioUnavailableError(
                 "missing_fluidsynth",
@@ -131,4 +132,3 @@ class FluidSynthEngine:
         if self._synth is None:
             raise AudioUnavailableError("init_error", "Audio engine is not initialized")
         return self._synth
-

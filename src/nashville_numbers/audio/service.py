@@ -29,7 +29,7 @@ class AudioService:
         self._installer = installer or DefaultPackInstaller(self._config_store.root_dir)
         self._engine_factory = engine_factory
         self._scheduler = scheduler or EventScheduler()
-        self._runtime_installer = runtime_installer or RuntimeInstaller()
+        self._runtime_installer = runtime_installer or RuntimeInstaller(self._config_store.root_dir)
         self._engine: FluidSynthEngine | None = None
         self._status: dict[str, Any] = {
             "hq_ready": False,
