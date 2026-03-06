@@ -162,6 +162,41 @@ class AudioService:
                 self._scheduler.schedule(delay, self._safe_note_on, channel, midi, velocity)
                 self._scheduler.schedule(delay + (note_ms / 1000.0), self._safe_note_off, channel, midi)
 
+    def play_sequence(self, events: list[dict[str, Any]], *, reset: bool = True) -> None:
+        with self._lock:
+            self._require_ready_locked()
+            if reset:
+                self._scheduler.clear()
+                assert self._engine is not None
+                self._engine.panic()
+
+            for event in events:
+                delay_seconds = max(0.0, float(event.get("delay_ms", 0))) / 1000.0
+                kind = str(event.get("kind", "")).lower()
+
+                if kind == "note":
+                    self._scheduler.schedule(
+                        delay_seconds,
+                        self._play_note_event,
+                        int(event["midi"]),
+                        int(event.get("velocity", 96)),
+                        int(event.get("duration_ms", 450)),
+                        int(event.get("channel", 0)),
+                    )
+                    continue
+
+                if kind == "chord":
+                    self._scheduler.schedule(
+                        delay_seconds,
+                        self._play_chord_event,
+                        list(event["midis"]),
+                        str(event.get("style", "strum")),
+                        int(event.get("strum_ms", 28)),
+                        int(event.get("duration_ms", event.get("note_ms", 700))),
+                        int(event.get("velocity", 96)),
+                        int(event.get("channel", 0)),
+                    )
+
     def panic(self) -> None:
         with self._lock:
             self._scheduler.clear()
@@ -190,6 +225,27 @@ class AudioService:
                 self._engine.note_off(channel, midi)
             except Exception:
                 return
+
+    def _play_note_event(self, midi: int, velocity: int, duration_ms: int, channel: int) -> None:
+        self.play_note(midi, velocity=velocity, duration_ms=duration_ms, channel=channel)
+
+    def _play_chord_event(
+        self,
+        midis: list[int],
+        style: str,
+        strum_ms: int,
+        note_ms: int,
+        velocity: int,
+        channel: int,
+    ) -> None:
+        self.play_chord(
+            midis,
+            style=style,
+            strum_ms=strum_ms,
+            note_ms=note_ms,
+            velocity=velocity,
+            channel=channel,
+        )
 
     def _teardown_engine_locked(self) -> None:
         if self._engine is not None:

@@ -78,6 +78,12 @@ class _FakeAudioService:
         if exc:
             raise exc
 
+    def play_sequence(self, events: list[dict[str, Any]], *, reset: bool) -> None:
+        self.calls.append(("play_sequence", events, reset))
+        exc = self.raise_for.get("play_sequence")
+        if exc:
+            raise exc
+
     def panic(self) -> None:
         self.calls.append(("panic",))
         exc = self.raise_for.get("panic")
@@ -340,6 +346,52 @@ def test_post_convert_rejects_empty_input(gui_server: int) -> None:
     assert payload == {"error": "Empty input"}
 
 
+def test_post_arrangement_plan_returns_structured_plan(
+    gui_server: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_plan(input_text: str, **kwargs: Any) -> dict[str, Any]:
+        assert input_text == "C - Am - F - G"
+        assert kwargs["tempo"] == 104
+        return {
+            "tempo": kwargs["tempo"],
+            "meter": kwargs["meter"],
+            "count_in_beats": kwargs["count_in_beats"],
+            "summary": {"bar_count": 4},
+            "sections": [],
+        }
+
+    monkeypatch.setattr(gui, "build_progression_plan", fake_plan)
+
+    status, _headers, payload = _post_json(
+        gui_server,
+        "/arrangement/plan",
+        {
+            "input": "C - Am - F - G",
+            "tempo": 104,
+            "meter": 4,
+            "count_in_beats": 4,
+            "groove": "anthem",
+            "bass_enabled": True,
+        },
+    )
+
+    assert status == 200
+    assert payload["plan"]["tempo"] == 104
+    assert payload["plan"]["summary"]["bar_count"] == 4
+
+
+def test_post_arrangement_plan_validates_boolean_flag(gui_server: int) -> None:
+    status, _headers, payload = _post_json(
+        gui_server,
+        "/arrangement/plan",
+        {"input": "C - F - G", "bass_enabled": "yes"},
+    )
+
+    assert status == 400
+    assert payload["reason"] == "validation"
+    assert payload["error"] == "'bass_enabled' must be a boolean"
+
+
 def test_post_convert_enforces_payload_size_limit(gui_server: int, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(gui, "MAX_INPUT_LENGTH", 10)
     status, _headers, body = _request(
@@ -414,6 +466,40 @@ def test_post_audio_play_chord_validates_input(gui_server: int) -> None:
     assert status == 400
     assert payload["reason"] == "validation"
     assert payload["error"] == "'style' must be 'block' or 'strum'"
+
+
+def test_post_audio_play_sequence_calls_service(
+    gui_server: int, fake_audio_service: _FakeAudioService
+) -> None:
+    status, _headers, payload = _post_json(
+        gui_server,
+        "/audio/play-sequence",
+        {
+            "events": [
+                {"kind": "note", "delay_ms": 0, "midi": 60, "duration_ms": 300},
+                {"kind": "chord", "delay_ms": 120, "midis": [60, 64, 67], "duration_ms": 700},
+            ],
+            "reset": True,
+        },
+    )
+
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["queued"] == 2
+    assert fake_audio_service.calls[-2][0] == "play_sequence"
+    assert fake_audio_service.calls[-2][2] is True
+
+
+def test_post_audio_play_sequence_validates_kind(gui_server: int) -> None:
+    status, _headers, payload = _post_json(
+        gui_server,
+        "/audio/play-sequence",
+        {"events": [{"kind": "noise", "delay_ms": 0, "duration_ms": 100}]},
+    )
+
+    assert status == 400
+    assert payload["reason"] == "validation"
+    assert payload["error"] == "Each event 'kind' must be 'note' or 'chord'"
 
 
 def test_post_audio_panic_requires_json_object(gui_server: int) -> None:
