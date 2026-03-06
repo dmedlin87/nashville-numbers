@@ -4,6 +4,7 @@ import json
 import builtins
 import socket
 import threading
+import time
 from http.client import HTTPConnection
 import types
 import sys
@@ -85,6 +86,19 @@ class _FakeAudioService:
         if exc:
             raise exc
 
+    def install_runtime(self, on_progress=None) -> dict[str, Any]:
+        self.calls.append(("install_runtime",))
+        exc = self.raise_for.get("install_runtime")
+        if exc:
+            raise exc
+        return {
+            "runtime_binary": True,
+            "python_binding": True,
+            "ready": True,
+            "message": "FluidSynth runtime and Python binding are ready.",
+            "audio_status": dict(self.status_payload),
+        }
+
 
 @pytest.fixture
 def gui_server() -> int:
@@ -129,10 +143,36 @@ def _post_json(port: int, path: str, payload: Any) -> tuple[int, dict[str, str],
     return status, headers, json.loads(text)
 
 
+def _get_json(port: int, path: str) -> tuple[int, dict[str, str], dict[str, Any]]:
+    status, headers, text = _request(port, "GET", path)
+    return status, headers, json.loads(text)
+
+
+def _poll_until_done(port: int, *, timeout: float = 3.0, interval: float = 0.05) -> dict[str, Any]:
+    """Poll /audio/install-runtime/status until running is False, then return the job dict."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        _, _, job = _get_json(port, "/audio/install-runtime/status")
+        if not job.get("running"):
+            return job
+        time.sleep(interval)
+    raise TimeoutError("Runtime install job did not finish in time")
+
+
+@pytest.fixture(autouse=True)
+def reset_runtime_install_job() -> None:
+    """Reset the global job state before every test to prevent state leakage."""
+    gui._DEFAULT_APP._audio_service = None
+    with gui._DEFAULT_APP.runtime_install_lock:
+        gui._DEFAULT_APP.runtime_install_job.update(
+            {"running": False, "stage": "", "pct": 0, "result": None, "error": None}
+        )
+
+
 @pytest.fixture
 def fake_audio_service(monkeypatch: pytest.MonkeyPatch) -> _FakeAudioService:
     service = _FakeAudioService()
-    monkeypatch.setattr(gui, "AUDIO_SERVICE", service)
+    monkeypatch.setattr(gui._DEFAULT_APP, "_audio_service", service)
     return service
 
 
@@ -189,6 +229,57 @@ def test_post_audio_install_default_failure_returns_server_error(
     status, _headers, payload = _post_json(gui_server, "/audio/install-default", {})
     assert status == 500
     assert payload == {"error": "network", "reason": "download_failed"}
+
+
+def test_post_audio_install_runtime_returns_started_immediately(
+    gui_server: int, fake_audio_service: _FakeAudioService
+) -> None:
+    status, _headers, payload = _post_json(gui_server, "/audio/install-runtime", {})
+    assert status == 200
+    assert payload["started"] is True
+
+
+def test_get_install_runtime_status_returns_job_state(gui_server: int) -> None:
+    _, _, job = _get_json(gui_server, "/audio/install-runtime/status")
+    assert "running" in job
+    assert "pct" in job
+    assert "stage" in job
+
+
+def test_post_audio_install_runtime_job_completes_with_result(
+    gui_server: int, fake_audio_service: _FakeAudioService
+) -> None:
+    _post_json(gui_server, "/audio/install-runtime", {})
+    job = _poll_until_done(gui_server)
+    assert job["running"] is False
+    assert job["result"]["ready"] is True
+    assert job["result"]["audio_status"] is not None
+    assert ("install_runtime",) in fake_audio_service.calls
+
+
+def test_post_audio_install_runtime_job_records_error_on_exception(
+    gui_server: int, fake_audio_service: _FakeAudioService
+) -> None:
+    fake_audio_service.raise_for["install_runtime"] = RuntimeError("install crashed")
+    _post_json(gui_server, "/audio/install-runtime", {})
+    job = _poll_until_done(gui_server)
+    assert job["running"] is False
+    assert job["result"] is None
+    assert "install crashed" in (job["error"] or "")
+
+
+def test_post_audio_install_runtime_rejects_concurrent_request(
+    gui_server: int, fake_audio_service: _FakeAudioService
+) -> None:
+    with gui._DEFAULT_APP.runtime_install_lock:
+        gui._DEFAULT_APP.runtime_install_job["running"] = True
+    try:
+        status, _headers, payload = _post_json(gui_server, "/audio/install-runtime", {})
+        assert status == 409
+        assert payload["reason"] == "already_running"
+    finally:
+        with gui._DEFAULT_APP.runtime_install_lock:
+            gui._DEFAULT_APP.runtime_install_job["running"] = False
 
 
 def test_post_convert_success_returns_result(gui_server: int, monkeypatch: pytest.MonkeyPatch) -> None:
