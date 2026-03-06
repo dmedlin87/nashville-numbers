@@ -1369,8 +1369,8 @@ _HTML = r"""<!DOCTYPE html>
       <!-- Mode row -->
       <div class="mode-row">
         <div class="mode-toggle" role="group" aria-label="Conversion direction">
-          <button class="mode-btn active" id="modeChordsBtn" onclick="setBuilderMode('chords')">Chords &rarr; NNS</button>
-          <button class="mode-btn" id="modeNnsBtn" onclick="setBuilderMode('nns')">NNS &rarr; Chords</button>
+          <button class="mode-btn active" id="modeChordsBtn" onclick="setBuilderMode('chords')" aria-pressed="true">Chords &rarr; NNS</button>
+          <button class="mode-btn" id="modeNnsBtn" onclick="setBuilderMode('nns')" aria-pressed="false">NNS &rarr; Chords</button>
         </div>
         <div class="key-row" id="keyRow" style="display:none" aria-label="Key selection">
           <span class="key-label">Key</span>
@@ -1938,6 +1938,10 @@ function renderOutput(data) {
     box.className = 'output-box has-error animate-in';
     box.innerHTML = `<span class="output-error">⚠ ${escapeHtml(data.error)}</span>`;
     fbSection.classList.remove('active');
+    if (document.getElementById('panelText').style.display !== 'none') {
+      const inputArea = document.getElementById('inputArea');
+      if (inputArea) inputArea.focus();
+    }
     return;
   }
 
@@ -2085,8 +2089,12 @@ function initBuilder() {
   });
 
   buildQualityPalette('qualityPalette', CHORD_QUALITIES, (suffix, btn) => {
-    document.querySelectorAll('#qualityPalette .quality-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#qualityPalette .quality-btn').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-pressed', 'false');
+    });
     btn.classList.add('active');
+    btn.setAttribute('aria-pressed', 'true');
     stagedQuality = suffix;
     updateStageDisplay();
   });
@@ -2108,9 +2116,14 @@ function initBuilder() {
     btn.dataset.acc = acc;
     btn.textContent = label;
     btn.title = acc === '' ? 'Natural' : acc === 'b' ? 'Flat' : 'Sharp';
+    btn.setAttribute('aria-pressed', acc === '' ? 'true' : 'false');
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.acc-btn').forEach(b => b.classList.remove('selected'));
+      document.querySelectorAll('.acc-btn').forEach(b => {
+        b.classList.remove('selected');
+        b.setAttribute('aria-pressed', 'false');
+      });
       btn.classList.add('selected');
+      btn.setAttribute('aria-pressed', 'true');
       nnsAccidental = acc;
       if (stagedNote) {
         const num = stagedNote.replace(/^[b#]/, '');
@@ -2136,8 +2149,12 @@ function initBuilder() {
   }
 
   buildQualityPalette('nnsQualityPalette', NNS_QUALITIES, (suffix, btn) => {
-    document.querySelectorAll('#nnsQualityPalette .quality-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#nnsQualityPalette .quality-btn').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-pressed', 'false');
+    });
     btn.classList.add('active');
+    btn.setAttribute('aria-pressed', 'true');
     stagedQuality = suffix;
     updateStageDisplay();
   });
@@ -2151,6 +2168,7 @@ function buildQualityPalette(id, qualities, handler) {
     btn.className = 'quality-btn' + (i === 0 ? ' active' : '');
     btn.dataset.suffix = q.suffix;
     btn.textContent = q.label;
+    btn.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
     btn.addEventListener('click', () => handler(q.suffix, btn));
     palette.appendChild(btn);
   });
@@ -2171,7 +2189,9 @@ function setBuilderMode(mode) {
   builderMode = mode;
   const isChords = mode === 'chords';
   document.getElementById('modeChordsBtn').classList.toggle('active', isChords);
+  document.getElementById('modeChordsBtn').setAttribute('aria-pressed', isChords);
   document.getElementById('modeNnsBtn').classList.toggle('active', !isChords);
+  document.getElementById('modeNnsBtn').setAttribute('aria-pressed', !isChords);
   document.getElementById('chordBuilder').style.display = isChords ? '' : 'none';
   document.getElementById('nnsBuilder').style.display = isChords ? 'none' : '';
   document.getElementById('keyRow').style.display = isChords ? 'none' : '';
@@ -2255,8 +2275,14 @@ function resetStage() {
   stagedQuality = '';
   document.querySelectorAll('.note-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.num-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('#qualityPalette .quality-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
-  document.querySelectorAll('#nnsQualityPalette .quality-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  document.querySelectorAll('#qualityPalette .quality-btn').forEach((b, i) => {
+    b.classList.toggle('active', i === 0);
+    b.setAttribute('aria-pressed', i === 0);
+  });
+  document.querySelectorAll('#nnsQualityPalette .quality-btn').forEach((b, i) => {
+    b.classList.toggle('active', i === 0);
+    b.setAttribute('aria-pressed', i === 0);
+  });
   updateStageDisplay();
 }
 
