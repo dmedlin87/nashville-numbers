@@ -55,6 +55,16 @@ class GuiApp:
     def get_max_input_length(self) -> int:
         return MAX_INPUT_LENGTH
 
+    def find_free_port(self, start: int = 8765) -> int:
+        for port in range(start, start + 100):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                try:
+                    sock.bind(("127.0.0.1", port))
+                    return port
+                except OSError:
+                    continue
+        raise OSError(f"Unable to find an available port after 100 attempts (starting from {start})")
+
     def run_runtime_install(self) -> None:
         """Background worker that calls install_runtime() with progress updates."""
 
@@ -101,10 +111,16 @@ class GuiApp:
     def create_server(self, port: int) -> HTTPServer:
         return HTTPServer(("127.0.0.1", port), self.get_handler_class())
 
+    def serve_server(self, server: HTTPServer) -> None:
+        try:
+            server.serve_forever()
+        except Exception:
+            pass
+
     def start_server(self, port: int) -> tuple[HTTPServer, str, threading.Thread]:
         server = self.create_server(port)
         url = f"http://127.0.0.1:{port}"
-        server_thread = threading.Thread(target=_start_server, args=(server,), daemon=True)
+        server_thread = threading.Thread(target=self.serve_server, args=(server,), daemon=True)
         server_thread.start()
         return server, url, server_thread
 
@@ -137,7 +153,7 @@ class GuiApp:
         server_thread.join(timeout=1.0)
 
     def run(self) -> None:
-        port = _find_free_port()
+        port = self.find_free_port()
         server, url, server_thread = self.start_server(port)
         print(f"Nashville Numbers GUI serving at {url}")
 
@@ -2526,24 +2542,6 @@ _DEFAULT_APP = GuiApp()
 # ---------------------------------------------------------------------------
 # Public entrypoint
 # ---------------------------------------------------------------------------
-
-def _find_free_port(start: int = 8765) -> int:
-    for port in range(start, start + 100):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(("127.0.0.1", port))
-                return port
-            except OSError:
-                continue
-    raise OSError(f"Unable to find an available port after 100 attempts (starting from {start})")
-
-
-def _start_server(server: HTTPServer) -> None:
-    try:
-        server.serve_forever()
-    except Exception:
-        pass
-
 
 def main() -> None:
     _DEFAULT_APP.run()

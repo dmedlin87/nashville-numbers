@@ -435,7 +435,7 @@ def test_find_free_port_skips_port_in_use() -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as busy:
         busy.bind(("127.0.0.1", 0))
         start = busy.getsockname()[1]
-        found = gui._find_free_port(start=start)
+        found = gui._DEFAULT_APP.find_free_port(start=start)
         assert found != start
         assert start < found <= start + 100
 
@@ -454,7 +454,7 @@ def test_find_free_port_raises_when_all_candidates_fail(monkeypatch: pytest.Monk
     monkeypatch.setattr(gui.socket, "socket", lambda *_args, **_kwargs: AlwaysBusySocket())
 
     with pytest.raises(OSError, match="Unable to find an available port"):
-        gui._find_free_port(start=9000)
+        gui._DEFAULT_APP.find_free_port(start=9000)
 
 
 def test_start_server_swallows_unexpected_errors() -> None:
@@ -462,7 +462,7 @@ def test_start_server_swallows_unexpected_errors() -> None:
         def serve_forever(self) -> None:
             raise RuntimeError("boom")
 
-    gui._start_server(BoomServer())
+    gui._DEFAULT_APP.serve_server(BoomServer())
 
 
 def test_html_contains_builder_placeholder_guard() -> None:
@@ -511,7 +511,7 @@ def test_main_uses_native_window_when_webview_is_available(monkeypatch: pytest.M
 
     fake_server = FakeServer()
 
-    monkeypatch.setattr(gui, "_find_free_port", lambda: port)
+    monkeypatch.setattr(gui._DEFAULT_APP, "find_free_port", lambda: port)
     monkeypatch.setattr(gui, "HTTPServer", lambda _addr, _handler: fake_server)
     monkeypatch.setattr(gui.threading, "Thread", FakeThread)
 
@@ -589,7 +589,7 @@ def test_main_falls_back_to_browser_when_webview_import_fails(
             raise KeyboardInterrupt
 
     fake_server = FakeServer()
-    monkeypatch.setattr(gui, "_find_free_port", lambda: port)
+    monkeypatch.setattr(gui._DEFAULT_APP, "find_free_port", lambda: port)
     monkeypatch.setattr(gui, "HTTPServer", lambda _addr, _handler: fake_server)
     monkeypatch.setattr(gui.threading, "Thread", FakeThread)
     monkeypatch.setattr(gui.threading, "Timer", FakeTimer)
@@ -664,7 +664,7 @@ def test_main_falls_back_to_browser_when_webview_runtime_fails(
     )
 
     monkeypatch.setitem(sys.modules, "webview", fake_webview)
-    monkeypatch.setattr(gui, "_find_free_port", lambda: port)
+    monkeypatch.setattr(gui._DEFAULT_APP, "find_free_port", lambda: port)
     monkeypatch.setattr(gui, "HTTPServer", lambda _addr, _handler: FakeServer())
     monkeypatch.setattr(gui.threading, "Thread", FakeThread)
     monkeypatch.setattr(gui.threading, "Timer", FakeTimer)
