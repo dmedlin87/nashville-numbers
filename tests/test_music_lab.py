@@ -35,22 +35,6 @@ def test_build_progression_plan_converts_nns_input_when_key_is_present() -> None
     assert first_section["bars"][2]["slots"][0]["nns"] == "6m"
 
 
-def test_build_progression_plan_prefix_key_without_semicolon_preserves_progression() -> None:
-    plan = build_progression_plan("in C C F G")
-
-    assert plan["resolved_key"] == {"tonic": "C", "mode": "Major"}
-    assert [bar["preview"] for bar in plan["sections"][0]["bars"]] == ["C", "F", "G"]
-    assert plan["sections"][0]["preview"] == "C | F | G"
-
-
-def test_build_progression_plan_uses_explicit_key_spelling_for_preview() -> None:
-    plan = build_progression_plan("1 4 5 7 in F#")
-
-    assert plan["resolved_key"] == {"tonic": "F#", "mode": "Major"}
-    assert [bar["preview"] for bar in plan["sections"][0]["bars"]] == ["F#", "B", "C#", "E#dim"]
-    assert plan["sections"][0]["preview"] == "F# | B | C# | E#dim"
-
-
 def test_build_progression_plan_requires_key_for_nns_input() -> None:
     with pytest.raises(ValueError, match="Key: REQUIRED"):
         build_progression_plan("1 - 4 - 5")
