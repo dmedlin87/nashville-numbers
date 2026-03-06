@@ -29,7 +29,11 @@ pip install -e .
 pip install -e ".[audio]"
 ```
 
-The GUI includes a first-run installer for a free default SoundFont pack (`FluidR3_GM`) and falls back to browser tone playback when HQ audio is unavailable.
+The GUI includes:
+
+- a Windows runtime bootstrap that can install a portable official `FluidSynth` build under `~/.nashville_numbers/runtime/fluidsynth`
+- a first-run installer for the free default SoundFont pack (`FluidR3_GM`)
+- automatic browser tone fallback when HQ audio is unavailable
 
 ---
 
