@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .converter import _convert_chords_to_nns, _convert_nns_to_chords, _extract_progression
+from .converter import _convert_chords_to_nns, _convert_nns_to_chords, _normalize_explicit_key
 from .key_inference import infer_keys, infer_sections
 from .parser import parse_input, tokenize_progression
 
@@ -66,7 +66,7 @@ def build_progression_plan(
         raise ValueError(f"Unknown groove '{groove}'")
 
     parsed = parse_input(input_text)
-    progression = _extract_progression(parsed.text)
+    progression = parsed.progression_text
     if not progression:
         raise ValueError("Empty input")
 
@@ -136,7 +136,8 @@ def _resolve_sections(parsed: Any, progression: str) -> list[dict[str, Any]]:
     if parsed.mode == "nns_to_chords":
         if not parsed.key_tonic:
             raise ValueError("Key: REQUIRED")
-        key = {"tonic": parsed.key_tonic, "mode": parsed.key_mode or "Major"}
+        tonic, mode = _normalize_explicit_key(parsed.key_tonic, parsed.key_mode or "Major")
+        key = {"tonic": tonic, "mode": mode}
         return [
             {
                 "label": "Main Loop",
@@ -148,7 +149,8 @@ def _resolve_sections(parsed: Any, progression: str) -> list[dict[str, Any]]:
         ]
 
     if parsed.key_tonic:
-        key = {"tonic": parsed.key_tonic, "mode": parsed.key_mode or "Major"}
+        tonic, mode = _normalize_explicit_key(parsed.key_tonic, parsed.key_mode or "Major")
+        key = {"tonic": tonic, "mode": mode}
         return [
             {
                 "label": "Main Loop",

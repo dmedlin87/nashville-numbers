@@ -9,6 +9,57 @@ from .key_inference import NOTE_TO_SEMITONE, infer_keys, infer_sections
 from .parser import parse_input, tokenize_progression
 
 SEMITONE_TO_DEGREE = {0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4", 6: "#4", 7: "5", 8: "b6", 9: "6", 10: "b7", 11: "7"}
+DEGREE_TO_SEMITONE = {
+    "1": 0,
+    "b2": 1,
+    "2": 2,
+    "b3": 3,
+    "3": 4,
+    "4": 5,
+    "#4": 6,
+    "5": 7,
+    "b6": 8,
+    "6": 9,
+    "b7": 10,
+    "7": 11,
+}
+DEGREE_TO_LETTER_OFFSET = {
+    "1": 0,
+    "b2": 1,
+    "2": 1,
+    "b3": 2,
+    "3": 2,
+    "4": 3,
+    "#4": 3,
+    "5": 4,
+    "b6": 5,
+    "6": 5,
+    "b7": 6,
+    "7": 6,
+}
+LETTER_TO_SEMITONE = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+LETTER_SEQUENCE = ("C", "D", "E", "F", "G", "A", "B")
+SHARP_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+FLAT_NOTE_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+DEFAULT_NOTE_NAMES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+EXPLICIT_KEY_NORMALIZATION = {
+    "Major": {
+        "A#": "Bb",
+        "D#": "Eb",
+        "E#": "F",
+        "Fb": "E",
+        "G#": "Ab",
+        "B#": "C",
+    },
+    "Minor": {
+        "Cb": "B",
+        "Db": "C#",
+        "E#": "F",
+        "Fb": "E",
+        "Gb": "F#",
+        "B#": "C",
+    },
+}
 
 MAJOR_DIATONIC = {"1": "", "2": "m", "3": "m", "4": "", "5": "", "6": "m", "7": "dim"}
 MINOR_DIATONIC = {"1": "m", "2": "dim", "b3": "", "4": "m", "5": "m", "b6": "", "b7": ""}
@@ -24,17 +75,16 @@ def convert(input_text: str) -> str:
     if parsed.mode == "nns_to_chords":
         if not parsed.key_tonic:
             return "Key: REQUIRED"
-        mode = parsed.key_mode or "Major"
-        progression = _extract_progression(parsed.text)
-        converted = _convert_nns_to_chords(progression, parsed.key_tonic, mode)
-        return build_output([OutputBlock(parsed.key_tonic, mode, converted)])
+        tonic, mode = _normalize_explicit_key(parsed.key_tonic, parsed.key_mode or "Major")
+        converted = _convert_nns_to_chords(parsed.progression_text, tonic, mode)
+        return build_output([OutputBlock(tonic, mode, converted)])
 
-    progression = _extract_progression(parsed.text)
     if parsed.key_tonic:
-        mode = parsed.key_mode or "Major"
-        converted = _convert_chords_to_nns(progression, parsed.key_tonic, mode)
-        return build_output([OutputBlock(parsed.key_tonic, mode, converted)])
+        tonic, mode = _normalize_explicit_key(parsed.key_tonic, parsed.key_mode or "Major")
+        converted = _convert_chords_to_nns(parsed.progression_text, tonic, mode)
+        return build_output([OutputBlock(tonic, mode, converted)])
 
+    progression = parsed.progression_text
     sections = infer_sections(progression)
     blocks: list[OutputBlock] = []
     if len(sections) > 1:
@@ -50,9 +100,11 @@ def convert(input_text: str) -> str:
 
 
 def _extract_progression(text: str) -> str:
-    cleaned = re.sub(r"\b(?:in|key\s*:)[^;\n]+", "", text, flags=re.IGNORECASE)
-    cleaned = cleaned.replace(";", " ").strip()
-    return cleaned
+    return parse_input(text).progression_text
+
+
+def _normalize_explicit_key(tonic: str, mode: str) -> tuple[str, str]:
+    return EXPLICIT_KEY_NORMALIZATION.get(mode, {}).get(tonic, tonic), mode
 
 
 def _convert_chords_to_nns(prog: str, tonic: str, mode: str) -> str:
@@ -197,22 +249,36 @@ def _normalize_extension_for_chord(ext_raw: str) -> str:
 
 
 def _degree_to_note(degree: str, tonic: str) -> str:
-    steps = {"1": 0, "b2": 1, "2": 2, "b3": 3, "3": 4, "4": 5, "#4": 6, "5": 7, "b6": 8, "6": 9, "b7": 10, "7": 11}
-    tonic_semitone = NOTE_TO_SEMITONE.get(tonic, 0)
-    semitone = (tonic_semitone + steps.get(degree, 0)) % 12
-    
-    sharp_keys = {"G", "D", "A", "E", "B", "F#", "C#"}
-    flat_keys = {"F", "Bb", "Eb", "Ab", "Db", "Gb", "Cb"}
-    
-    if tonic in flat_keys:
-        preferred = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
-    elif tonic in sharp_keys:
-        preferred = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-    else:
-        # Default (C)
-        preferred = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
-        
-    return preferred[semitone]
+    semitone_step = DEGREE_TO_SEMITONE.get(degree)
+    letter_offset = DEGREE_TO_LETTER_OFFSET.get(degree)
+    tonic_semitone = NOTE_TO_SEMITONE.get(tonic)
+    if semitone_step is None or letter_offset is None or tonic_semitone is None:
+        return tonic
+
+    semitone = (tonic_semitone + semitone_step) % 12
+    tonic_letter = tonic[0]
+    tonic_letter_index = LETTER_SEQUENCE.index(tonic_letter)
+    target_letter = LETTER_SEQUENCE[(tonic_letter_index + letter_offset) % len(LETTER_SEQUENCE)]
+    natural_semitone = LETTER_TO_SEMITONE[target_letter]
+    accidental_delta = (semitone - natural_semitone + 12) % 12
+    if accidental_delta > 6:
+        accidental_delta -= 12
+
+    if accidental_delta == -1:
+        return f"{target_letter}b"
+    if accidental_delta == 0:
+        return target_letter
+    if accidental_delta == 1:
+        return f"{target_letter}#"
+    return _fallback_note_name(semitone, tonic)
+
+
+def _fallback_note_name(semitone: int, tonic: str) -> str:
+    if "b" in tonic:
+        return FLAT_NOTE_NAMES[semitone]
+    if "#" in tonic:
+        return SHARP_NOTE_NAMES[semitone]
+    return DEFAULT_NOTE_NAMES[semitone]
 
 
 def _suffix_to_chord_quality(suffix: str, degree: str, mode: str) -> str:

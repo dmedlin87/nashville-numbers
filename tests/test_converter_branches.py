@@ -10,6 +10,10 @@ def test_explicit_key_chords_to_nns_uses_single_block() -> None:
     assert convert("C F G in C") == "Key: C Major\n1 4 5"
 
 
+def test_prefix_explicit_key_without_semicolon_uses_single_block() -> None:
+    assert convert("in C C F G") == "Key: C Major\n1 4 5"
+
+
 def test_modulation_uses_section_split_path() -> None:
     progression = (
         "C F G C F G C F G C F G | C F G C F G C F G C F G | "
