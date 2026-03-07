@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "nns-gui",
-      "runtimeExecutable": "nns-gui",
-      "runtimeArgs": [],
+      "runtimeExecutable": "python",
+      "runtimeArgs": [".claude/dev-server.py"],
       "port": 8765
     }
   ]
