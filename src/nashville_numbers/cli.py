@@ -27,7 +27,14 @@ def main() -> None:
             print("Usage: nns-convert [PROGRESSION]", file=sys.stderr)
             print("Run 'nns-convert --help' for more information.", file=sys.stderr)
             sys.exit(1)
-        input_text = sys.stdin.read(MAX_INPUT_LENGTH).strip()
+        input_text = sys.stdin.read(MAX_INPUT_LENGTH + 1)
+        if len(input_text) > MAX_INPUT_LENGTH:
+            print(
+                f"Input exceeds maximum length of {MAX_INPUT_LENGTH} characters.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        input_text = input_text.strip()
     print(convert(input_text))
 
 

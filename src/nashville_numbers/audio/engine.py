@@ -2,12 +2,49 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
+import platform
 from pathlib import Path
 from threading import RLock
 from typing import Any
 
 from .errors import AudioUnavailableError
 from .runtime_support import import_fluidsynth_module
+
+# Preferred audio driver per platform.  Defaulting here avoids FluidSynth
+# probing every available backend on start-up, which prints SDL3/MIDI/device
+# warnings to stderr even when audio ultimately works.
+_PLATFORM_DRIVER_DEFAULTS: dict[str, str] = {
+    "Windows": "dsound",
+    "Darwin": "coreaudio",
+    "Linux": "pulseaudio",
+}
+
+
+@contextlib.contextmanager
+def _suppress_stderr():
+    """Redirect C-library stderr (fd 2) to /dev/null for the duration.
+
+    pyfluidsynth's start() unconditionally creates a MIDI input driver even
+    when no MIDI device is present, which prints "not enough MIDI in devices"
+    and SDL3 probing warnings to the C-level stderr.  Suppressing fd 2 during
+    the start() call hides these cosmetic messages while leaving the Python
+    logging stream intact after the call returns.
+    """
+    try:
+        devnull_fd = os.open(os.devnull, os.O_RDWR)
+        saved_fd = os.dup(2)
+    except OSError:
+        yield
+        return
+    try:
+        os.dup2(devnull_fd, 2)
+        yield
+    finally:
+        os.dup2(saved_fd, 2)
+        os.close(saved_fd)
+        os.close(devnull_fd)
 
 
 class FluidSynthEngine:
@@ -58,15 +95,21 @@ class FluidSynthEngine:
             self._sfid = sfid
 
     def _start_output(self, synth: Any) -> None:
-        driver = self.quality.get("driver")
+        driver = self.quality.get("driver") or _PLATFORM_DRIVER_DEFAULTS.get(platform.system())
         if driver:
-            synth.start(driver=str(driver))
-            return
+            try:
+                with _suppress_stderr():
+                    synth.start(driver=str(driver))
+                return
+            except Exception:
+                pass  # fall through to unguided start
 
         try:
-            synth.start()
+            with _suppress_stderr():
+                synth.start()
         except TypeError:
-            synth.start(driver="dsound")
+            with _suppress_stderr():
+                synth.start(driver="dsound")
 
     def _configure_effects(self, synth: Any) -> None:
         reverb = self.quality.get("reverb")

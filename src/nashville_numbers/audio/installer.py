@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import hashlib
 import json
 import platform
 import shutil
 import subprocess
 import sys
+import tempfile
+import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -69,46 +72,58 @@ class DefaultPackInstaller:
         self.root_dir.mkdir(parents=True, exist_ok=True)
         self.temp_root.mkdir(parents=True, exist_ok=True)
         archive_path = self.temp_root / f"{self.manifest.id}.zip"
+        staging_root = Path(tempfile.mkdtemp(prefix=f"{self.manifest.id}-", dir=str(self.temp_root)))
 
         try:
-            with urlopen(self.manifest.url, timeout=90) as response, archive_path.open("wb") as out:
-                shutil.copyfileobj(response, out)
-        except URLError as exc:
-            raise AudioInstallError("download_failed", f"Failed to download default sound pack: {exc}") from exc
+            self._download_to_path(self.manifest.url, archive_path)
+        except AudioInstallError:
+            shutil.rmtree(staging_root, ignore_errors=True)
+            raise
         except OSError as exc:
+            shutil.rmtree(staging_root, ignore_errors=True)
             raise AudioInstallError("download_failed", f"Unable to write downloaded sound pack: {exc}") from exc
-
-        if self.pack_root.exists():
-            shutil.rmtree(self.pack_root, ignore_errors=True)
-        self.pack_root.mkdir(parents=True, exist_ok=True)
 
         try:
             with zipfile.ZipFile(archive_path, "r") as zip_file:
+                extracted_files: list[str] = []
                 for member in zip_file.infolist():
-                    target_path = Path(self.pack_root) / member.filename
-                    if not target_path.resolve().is_relative_to(self.pack_root.resolve()):
+                    target_path = Path(staging_root) / member.filename
+                    if not target_path.resolve().is_relative_to(staging_root.resolve()):
                         raise AudioInstallError("invalid_pack", f"Zip slip detected in archive: {member.filename}")
-                    zip_file.extract(member, self.pack_root)
+                    zip_file.extract(member, staging_root)
+                    if not member.is_dir():
+                        extracted_files.append(member.filename)
         except zipfile.BadZipFile as exc:
+            shutil.rmtree(staging_root, ignore_errors=True)
             raise AudioInstallError("invalid_pack", "Downloaded pack archive is invalid") from exc
         finally:
             archive_path.unlink(missing_ok=True)
 
-        soundfont_path = self._find_soundfont(self.pack_root)
+        soundfont_path = self._find_soundfont(staging_root)
         if soundfont_path is None:
+            shutil.rmtree(staging_root, ignore_errors=True)
             raise AudioInstallError(
                 "invalid_pack",
                 f"Downloaded pack did not contain {self.manifest.soundfont_file}",
             )
 
+        if self.pack_root.exists():
+            shutil.rmtree(self.pack_root, ignore_errors=True)
+        shutil.move(str(staging_root), str(self.pack_root))
+        final_soundfont_path = self._find_soundfont(self.pack_root)
+        assert final_soundfont_path is not None
+
         self._write_notice(self.pack_root)
         metadata = {
             "id": self.manifest.id,
             "url": self.manifest.url,
-            "soundfont_path": str(soundfont_path),
+            "soundfont_path": str(final_soundfont_path),
+            "sha256": self._sha256(final_soundfont_path),
+            "file_size": final_soundfont_path.stat().st_size,
+            "expected_files": extracted_files,
         }
         (self.pack_root / "pack.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-        return soundfont_path
+        return final_soundfont_path
 
     def status(self) -> dict[str, object]:
         soundfont_path = self._find_soundfont(self.pack_root)
@@ -130,6 +145,32 @@ class DefaultPackInstaller:
             return direct
         candidates = list(root.rglob(self.manifest.soundfont_file))
         return candidates[0] if candidates else None
+
+    def _download_to_path(self, url: str, destination: Path, *, attempts: int = 3) -> None:
+        last_exc: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                with urlopen(url, timeout=90) as response, destination.open("wb") as out:
+                    shutil.copyfileobj(response, out)
+                return
+            except URLError as exc:
+                last_exc = exc
+                if attempt < attempts:
+                    time.sleep(0.15 * attempt)
+                    continue
+                raise AudioInstallError("network_unavailable", f"Failed to download default sound pack: {exc}") from exc
+        if last_exc is not None:
+            raise AudioInstallError("network_unavailable", f"Failed to download default sound pack: {last_exc}")
+
+    def _sha256(self, path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            while True:
+                chunk = handle.read(65536)
+                if not chunk:
+                    break
+                digest.update(chunk)
+        return digest.hexdigest()
 
 
 class RuntimeInstaller:
@@ -225,6 +266,7 @@ class RuntimeInstaller:
             "python_binding": binding_ok,
             "ready": ready,
             "message": message,
+            "install_error": self._classify_error(runtime_ok, binding_ok),
             "runtime_path": snapshot.get("binary_path"),
             "library_path": snapshot.get("library_path"),
             "runtime_error": self._last_runtime_error,
@@ -246,7 +288,7 @@ class RuntimeInstaller:
         if system == "Darwin":
             ok = self._try_command(["brew", "install", "fluid-synth"])
             if not ok and self._last_command_error:
-                self._last_runtime_error = self._last_command_error
+                self._last_runtime_error = self._classify_command_error(self._last_command_error)
             return ok
         # Linux: try common package managers
         for cmd in (
@@ -257,7 +299,7 @@ class RuntimeInstaller:
             if shutil.which(cmd[0]) and self._try_command(cmd):
                 return True
             if self._last_command_error:
-                self._last_runtime_error = self._last_command_error
+                self._last_runtime_error = self._classify_command_error(self._last_command_error)
         return False
 
     def _try_windows(self, on_progress=None) -> bool:
@@ -313,10 +355,9 @@ class RuntimeInstaller:
             on_progress(22, f"Downloading {asset.tag_name} runtime…")
         try:
             request = Request(asset.download_url, headers=_HTTP_HEADERS)
-            with urlopen(request, timeout=90) as response, archive_path.open("wb") as out:
-                shutil.copyfileobj(response, out)
+            self._download_runtime_asset(request, archive_path)
         except (URLError, OSError) as exc:
-            self._last_runtime_error = f"Failed to download portable FluidSynth runtime: {exc}"
+            self._last_runtime_error = f"network_unavailable: Failed to download portable FluidSynth runtime: {exc}"
             return False
 
         if on_progress is not None:
@@ -350,6 +391,7 @@ class RuntimeInstaller:
             "tag_name": asset.tag_name,
             "asset_name": asset.name,
             "download_url": asset.download_url,
+            "asset_sha256": self._sha256(archive_path) if archive_path.exists() else None,
         }
         (final_root / "runtime.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
@@ -357,8 +399,53 @@ class RuntimeInstaller:
         if snapshot["runtime_ready"]:
             return True
 
-        self._last_runtime_error = "Portable runtime was downloaded, but the runtime could not be validated."
+        self._last_runtime_error = "runtime_missing: Portable runtime was downloaded, but the runtime could not be validated."
         return False
+
+    def _download_runtime_asset(self, request: Request, destination: Path, *, attempts: int = 3) -> None:
+        last_exc: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                with urlopen(request, timeout=90) as response, destination.open("wb") as out:
+                    shutil.copyfileobj(response, out)
+                return
+            except (URLError, OSError) as exc:
+                last_exc = exc
+                if attempt < attempts:
+                    time.sleep(0.15 * attempt)
+                    continue
+                raise
+        if last_exc is not None:
+            raise last_exc
+
+    def _sha256(self, path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            while True:
+                chunk = handle.read(65536)
+                if not chunk:
+                    break
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def _classify_command_error(self, message: str) -> str:
+        lower = message.lower()
+        if "timed out" in lower:
+            return "network_unavailable"
+        if "not found" in lower:
+            return "runtime_missing"
+        if "denied" in lower or "permission" in lower:
+            return "permission_denied"
+        return "runtime_missing"
+
+    def _classify_error(self, runtime_ok: bool, binding_ok: bool) -> str | None:
+        if runtime_ok and binding_ok:
+            return None
+        if not runtime_ok and not binding_ok:
+            return "runtime_missing"
+        if not runtime_ok:
+            return "runtime_missing"
+        return "binding_install_failed"
 
     def _find_windows_asset(self) -> RuntimeAsset:
         architecture = "x64" if sys.maxsize > 2**32 else "x86"

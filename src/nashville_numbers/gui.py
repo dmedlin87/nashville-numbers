@@ -12,7 +12,7 @@ import socket
 import threading
 import webbrowser
 from collections.abc import Callable
-from http.server import HTTPServer
+from http.server import HTTPServer, ThreadingHTTPServer
 
 from .audio import get_audio_service
 from .converter import convert
@@ -20,10 +20,13 @@ from .gui_http import build_handler
 from .music_lab import build_progression_plan
 
 MAX_INPUT_LENGTH = 1_000_000  # 1MB
-_REQUEST_TOKEN_PLACEHOLDER = "__NNS_REQUEST_TOKEN__"
+MAX_ACTIVE_CONVERSIONS = 4
 
-def _new_runtime_install_job() -> dict[str, object]:
+
+def _new_install_job(kind: str) -> dict[str, object]:
     return {
+        "id": "",
+        "kind": kind,
         "running": False,
         "stage": "",
         "pct": 0,
@@ -38,9 +41,14 @@ class GuiApp:
     def __init__(self, *, audio_service_factory: Callable[[], object] = get_audio_service) -> None:
         self._audio_service_factory = audio_service_factory
         self._audio_service: object | None = None
-        self._request_token = secrets.token_urlsafe(32)
-        self.runtime_install_job = _new_runtime_install_job()
-        self.runtime_install_lock = threading.Lock()
+        self._session_id = secrets.token_urlsafe(24)
+        self._session_secret = secrets.token_urlsafe(32)
+        self._session_cookie_name = "nns_session"
+        self._base_url = "http://127.0.0.1"
+        self.runtime_install_job = _new_install_job("runtime")
+        self.default_install_job = _new_install_job("default_pack")
+        self.install_job_lock = threading.Lock()
+        self.conversion_semaphore = threading.BoundedSemaphore(MAX_ACTIVE_CONVERSIONS)
         self.handler_class: type | None = None
 
     def get_audio_service(self) -> object:
@@ -51,11 +59,8 @@ class GuiApp:
     def get_initialized_audio_service(self) -> object | None:
         return self._audio_service
 
-    def get_request_token(self) -> str:
-        return self._request_token
-
     def get_html(self) -> str:
-        return _HTML.replace(_REQUEST_TOKEN_PLACEHOLDER, html_escape(self._request_token, quote=True))
+        return _HTML
 
     def convert_text(self, input_text: str) -> str:
         return convert(input_text)
@@ -79,7 +84,7 @@ class GuiApp:
         raise OSError(f"Unable to find an available port after 100 attempts (starting from {start})")
 
     def create_http_server(self, port: int, handler_class: type) -> HTTPServer:
-        return HTTPServer(("127.0.0.1", port), handler_class)
+        return ThreadingHTTPServer(("127.0.0.1", port), handler_class)
 
     def create_thread(
         self, target: Callable[..., object], args: tuple[object, ...], *, daemon: bool
@@ -100,38 +105,72 @@ class GuiApp:
 
         return webview
 
-    def run_runtime_install(self) -> None:
-        """Background worker that calls install_runtime() with progress updates."""
+    def get_session_cookie_name(self) -> str:
+        return self._session_cookie_name
+
+    def get_expected_session_value(self) -> str:
+        return f"{self._session_id}.{self._session_secret}"
+
+    def issue_session_cookie(self) -> str:
+        return (
+            f"{self._session_cookie_name}={self.get_expected_session_value()}; "
+            "HttpOnly; SameSite=Strict; Path=/"
+        )
+
+    def is_allowed_origin(self, origin: str | None, referer: str | None) -> bool:
+        if origin:
+            return origin == self._base_url
+        if referer:
+            return referer.startswith(self._base_url + "/") or referer == self._base_url
+        return True
+
+    def _run_install_job(self, job: dict[str, object], action: Callable[..., dict[str, object]]) -> None:
+        """Background worker that calls install actions with progress updates."""
 
         def on_progress(pct: int, stage: str) -> None:
-            with self.runtime_install_lock:
-                self.runtime_install_job["pct"] = pct
-                self.runtime_install_job["stage"] = stage
+            with self.install_job_lock:
+                job["pct"] = pct
+                job["stage"] = stage
 
         try:
-            result = self.get_audio_service().install_runtime(on_progress=on_progress)
-            with self.runtime_install_lock:
-                self.runtime_install_job.update(
+            result = action(on_progress=on_progress)
+            with self.install_job_lock:
+                job.update(
                     {"running": False, "pct": 100, "stage": "Done", "result": result, "error": None}
                 )
         except Exception as exc:
-            with self.runtime_install_lock:
-                self.runtime_install_job.update(
+            with self.install_job_lock:
+                job.update(
                     {"running": False, "pct": 0, "stage": "Failed", "error": str(exc), "result": None}
                 )
+
+    def run_runtime_install(self) -> None:
+        self._run_install_job(self.runtime_install_job, self.get_audio_service().install_runtime)
+
+    def run_default_pack_install(self) -> None:
+        self._run_install_job(self.default_install_job, lambda **_: self.get_audio_service().install_default_pack())
+
+    def get_install_job(self, kind: str) -> dict[str, object]:
+        return self.runtime_install_job if kind == "runtime" else self.default_install_job
 
     def get_handler_class(self) -> type:
         if self.handler_class is not None:
             return self.handler_class
         self.handler_class = build_handler(
             get_html=self.get_html,
-            get_request_token=self.get_request_token,
+            get_session_cookie_name=self.get_session_cookie_name,
+            get_expected_session_value=self.get_expected_session_value,
+            issue_session_cookie=self.issue_session_cookie,
+            is_allowed_origin=self.is_allowed_origin,
+            conversion_semaphore=self.conversion_semaphore,
             get_audio_service=self.get_audio_service,
             convert_text=self.convert_text,
             plan_arrangement=self.plan_arrangement,
             get_max_input_length=self.get_max_input_length,
+            default_install_job=self.default_install_job,
             runtime_install_job=self.runtime_install_job,
-            runtime_install_lock=self.runtime_install_lock,
+            install_job_lock=self.install_job_lock,
+            run_default_pack_install=self.run_default_pack_install,
             run_runtime_install=self.run_runtime_install,
         )
         return self.handler_class
@@ -158,6 +197,7 @@ class GuiApp:
         server = self.create_server(port)
         _host, actual_port = getattr(server, "server_address", ("127.0.0.1", port))
         url = f"http://127.0.0.1:{actual_port or port}"
+        self._base_url = url
         server_thread = self.create_thread(self.serve_server, (server,), daemon=True)
         server_thread.start()
         return server, url, server_thread
@@ -215,7 +255,6 @@ _HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="nns-request-token" content="__NNS_REQUEST_TOKEN__" />
 <title>Nashville Numbers</title>
 <style>
   /* ── Base ──────────────────────────────────────────────────────────────── */
@@ -2235,12 +2274,9 @@ function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-const REQUEST_TOKEN = document.querySelector('meta[name="nns-request-token"]')?.content || '';
-
 function appFetch(resource, options = {}) {
   const headers = new Headers(options.headers || {});
-  headers.set('X-NNS-Request-Token', REQUEST_TOKEN);
-  return fetch(resource, { ...options, headers });
+  return fetch(resource, { credentials: 'same-origin', ...options, headers });
 }
 
 const MUSIC_LAB_GROOVES = {
@@ -2291,6 +2327,7 @@ let audioState = {
   message: ''
 };
 let installInProgress = false;
+let defaultInstallJobId = '';
 let musicLabState = {
   selectedGroove: 'anthem',
   plan: null,
@@ -2386,9 +2423,13 @@ const webTone = (() => {
 function _setAudioState(nextState) {
   audioState = {
     hq_ready: !!nextState.hq_ready,
+    hq_requested: nextState.hq_requested !== false,
     engine: nextState.engine || 'unavailable',
     reason: nextState.reason || 'init_error',
     fallback: nextState.fallback || 'web_tone',
+    fallback_active: nextState.fallback_active !== false,
+    last_install_error: nextState.last_install_error || '',
+    scheduler: nextState.scheduler || {},
     pack: nextState.pack || { id: 'fluidr3_gm', installed: false, path: null },
     message: nextState.message || ''
   };
@@ -2426,6 +2467,8 @@ function updateAudioStatusUI() {
 
   if (audioState.message) {
     detail.textContent = audioState.message;
+  } else if (audioState.last_install_error) {
+    detail.textContent = audioState.last_install_error;
   } else if (audioState.reason === 'missing_soundfont') {
     detail.textContent = 'Install the free HQ pack to enable FluidSynth playback.';
   } else if (audioState.reason === 'missing_fluidsynth') {
@@ -2465,7 +2508,7 @@ async function installDefaultPack() {
       body: '{}'
     });
     const payload = await response.json();
-    if (!response.ok) {
+    if (!response.ok || !payload.started) {
       if (payload && payload.reason) {
         _setAudioState({
           hq_ready: false,
@@ -2478,10 +2521,8 @@ async function installDefaultPack() {
       }
       return;
     }
-    _setAudioState({
-      ...(payload.status || payload),
-      message: 'Free HQ pack installed.'
-    });
+    defaultInstallJobId = payload.job && payload.job.id ? payload.job.id : '';
+    _pollDefaultInstall();
   } catch (_err) {
     _setAudioState({
       hq_ready: false,
@@ -2495,6 +2536,32 @@ async function installDefaultPack() {
     btn.classList.remove('loading');
     installInProgress = false;
   }
+}
+
+function _pollDefaultInstall() {
+  window.setTimeout(async () => {
+    try {
+      const resp = await appFetch('/audio/install-default/status');
+      const job = await resp.json();
+      if (job.running) {
+        _pollDefaultInstall();
+        return;
+      }
+      if (job.result) {
+        _setAudioState({ ...(job.result.audio_status || job.result), message: 'Free HQ pack installed.' });
+        return;
+      }
+      if (job.error) {
+        _setAudioState({ ...audioState, message: job.error });
+      }
+    } catch (_err) {
+      _setAudioState({ ...audioState, message: 'Failed to poll pack installer.' });
+    } finally {
+      installInProgress = false;
+      const btn = document.getElementById('audioInstallBtn');
+      if (btn) btn.classList.remove('loading');
+    }
+  }, 600);
 }
 
 let runtimeInstallInProgress = false;

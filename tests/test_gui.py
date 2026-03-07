@@ -110,6 +110,7 @@ def gui_server() -> int:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     _host, port = server.server_address
+    _AUTH_PORT["port"] = port
     try:
         yield port
     finally:
@@ -135,8 +136,19 @@ def _request(
         conn.close()
 
 
+_AUTH_PORT: dict[str, int] = {"port": 0}
+
+
 def _auth_headers(headers: dict[str, str] | None = None) -> dict[str, str]:
-    merged = {"X-NNS-Request-Token": gui._DEFAULT_APP.get_request_token()}
+    probe = HTTPConnection("127.0.0.1", _AUTH_PORT["port"], timeout=3)
+    try:
+        probe.request("GET", "/")
+        response = probe.getresponse()
+        response.read()
+        cookie = response.getheader("Set-Cookie") or ""
+    finally:
+        probe.close()
+    merged = {"Cookie": cookie.split(";", 1)[0]}
     if headers:
         merged.update(headers)
     return merged
@@ -148,6 +160,7 @@ def _post_json(
     body = json.dumps(payload).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     if authenticated:
+        _AUTH_PORT["port"] = port
         headers = _auth_headers(headers)
     status, headers, text = _request(
         port,
@@ -162,6 +175,7 @@ def _post_json(
 def _get_json(
     port: int, path: str, *, authenticated: bool = True
 ) -> tuple[int, dict[str, str], dict[str, Any]]:
+    _AUTH_PORT["port"] = port
     headers = _auth_headers() if authenticated else None
     status, headers, text = _request(port, "GET", path, headers=headers)
     return status, headers, json.loads(text)
@@ -178,14 +192,27 @@ def _poll_until_done(port: int, *, timeout: float = 3.0, interval: float = 0.05)
     raise TimeoutError("Runtime install job did not finish in time")
 
 
+def _poll_until_done_default(port: int, *, timeout: float = 3.0, interval: float = 0.05) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        _, _, job = _get_json(port, "/audio/install-default/status")
+        if not job.get("running"):
+            return job
+        time.sleep(interval)
+    raise TimeoutError("Default install job did not finish in time")
+
+
 @pytest.fixture(autouse=True)
 def reset_runtime_install_job() -> None:
     """Reset the global job state before every test to prevent state leakage."""
     gui._DEFAULT_APP._audio_service = None
     gui._DEFAULT_APP.handler_class = None
-    with gui._DEFAULT_APP.runtime_install_lock:
+    with gui._DEFAULT_APP.install_job_lock:
         gui._DEFAULT_APP.runtime_install_job.update(
-            {"running": False, "stage": "", "pct": 0, "result": None, "error": None}
+            {"id": "", "running": False, "stage": "", "pct": 0, "result": None, "error": None}
+        )
+        gui._DEFAULT_APP.default_install_job.update(
+            {"id": "", "running": False, "stage": "", "pct": 0, "result": None, "error": None}
         )
 
 
@@ -220,9 +247,8 @@ def test_get_root_serves_embedded_html(gui_server: int) -> None:
     assert status == 200
     assert "text/html" in headers["content-type"]
     assert "<title>Nashville Numbers</title>" in body
-    assert 'meta name="nns-request-token"' in body
-    assert gui._DEFAULT_APP.get_request_token() in body
-    assert "__NNS_REQUEST_TOKEN__" not in body
+    assert 'meta name="nns-request-token"' not in body
+    assert "set-cookie" in headers
 
 
 def test_get_unknown_path_returns_not_found_json(gui_server: int) -> None:
@@ -245,10 +271,10 @@ def test_get_audio_status_returns_current_audio_state(
     assert fake_audio_service.calls == [("status",)]
 
 
-def test_get_audio_status_requires_request_token(gui_server: int) -> None:
+def test_get_audio_status_requires_session(gui_server: int) -> None:
     status, _headers, payload = _get_json(gui_server, "/audio/status", authenticated=False)
     assert status == 403
-    assert payload == {"error": "Forbidden", "reason": "invalid_request_token"}
+    assert payload == {"error": "Forbidden", "reason": "session_invalid"}
 
 
 def test_post_audio_install_default_success_returns_status(
@@ -256,9 +282,11 @@ def test_post_audio_install_default_success_returns_status(
 ) -> None:
     status, _headers, payload = _post_json(gui_server, "/audio/install-default", {})
     assert status == 200
-    assert payload["status"]["hq_ready"] is True
-    assert payload["status"]["engine"] == "fluidsynth"
-    assert payload["status"]["pack"]["installed"] is True
+    assert payload["started"] is True
+    job = _poll_until_done_default(gui_server)
+    assert job["result"]["hq_ready"] is True
+    assert job["result"]["engine"] == "fluidsynth"
+    assert job["result"]["pack"]["installed"] is True
 
 
 def test_post_audio_install_default_unavailable_returns_conflict(
@@ -266,8 +294,10 @@ def test_post_audio_install_default_unavailable_returns_conflict(
 ) -> None:
     fake_audio_service.raise_for["install_default_pack"] = AudioUnavailableError("disabled", "Audio disabled")
     status, _headers, payload = _post_json(gui_server, "/audio/install-default", {})
-    assert status == 409
-    assert payload == {"error": "Audio disabled", "reason": "disabled"}
+    assert status == 200
+    assert payload["started"] is True
+    job = _poll_until_done_default(gui_server)
+    assert job["error"] == "Audio disabled"
 
 
 def test_post_audio_install_default_failure_returns_server_error(
@@ -275,8 +305,10 @@ def test_post_audio_install_default_failure_returns_server_error(
 ) -> None:
     fake_audio_service.raise_for["install_default_pack"] = AudioInstallError("download_failed", "network")
     status, _headers, payload = _post_json(gui_server, "/audio/install-default", {})
-    assert status == 500
-    assert payload == {"error": "network", "reason": "download_failed"}
+    assert status == 200
+    assert payload["started"] is True
+    job = _poll_until_done_default(gui_server)
+    assert job["error"] == "network"
 
 
 def test_post_audio_install_runtime_returns_started_immediately(
@@ -285,6 +317,7 @@ def test_post_audio_install_runtime_returns_started_immediately(
     status, _headers, payload = _post_json(gui_server, "/audio/install-runtime", {})
     assert status == 200
     assert payload["started"] is True
+    assert payload["job"]["id"]
 
 
 def test_get_install_runtime_status_returns_job_state(gui_server: int) -> None:
@@ -319,14 +352,14 @@ def test_post_audio_install_runtime_job_records_error_on_exception(
 def test_post_audio_install_runtime_rejects_concurrent_request(
     gui_server: int, fake_audio_service: _FakeAudioService
 ) -> None:
-    with gui._DEFAULT_APP.runtime_install_lock:
+    with gui._DEFAULT_APP.install_job_lock:
         gui._DEFAULT_APP.runtime_install_job["running"] = True
     try:
         status, _headers, payload = _post_json(gui_server, "/audio/install-runtime", {})
-        assert status == 409
-        assert payload["reason"] == "already_running"
+        assert status == 503
+        assert payload["reason"] == "install_in_progress"
     finally:
-        with gui._DEFAULT_APP.runtime_install_lock:
+        with gui._DEFAULT_APP.install_job_lock:
             gui._DEFAULT_APP.runtime_install_job["running"] = False
 
 
@@ -370,12 +403,12 @@ def test_post_convert_rejects_empty_input(gui_server: int) -> None:
     assert payload == {"error": "Empty input"}
 
 
-def test_post_convert_requires_request_token(gui_server: int) -> None:
+def test_post_convert_requires_session(gui_server: int) -> None:
     status, _headers, payload = _post_json(
         gui_server, "/convert", {"input": "C F G"}, authenticated=False
     )
     assert status == 403
-    assert payload == {"error": "Forbidden", "reason": "invalid_request_token"}
+    assert payload == {"error": "Forbidden", "reason": "session_invalid"}
 
 
 def test_post_arrangement_plan_returns_structured_plan(

@@ -25,22 +25,46 @@ class FakeScheduler:
         self.clear_calls = 0
         self.stop_calls = 0
         self._next_id = 1
+        self._metrics = {
+            "queue_depth": 0,
+            "queued_count": 0,
+            "executed_count": 0,
+            "dropped_count": 0,
+            "callback_error_count": 0,
+            "max_queue_depth": 0,
+            "recent_lag_ms": 0.0,
+            "last_error": "",
+        }
 
     def schedule(self, delay_seconds: float, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> int:
         event_id = self._next_id
         self._next_id += 1
         self.calls.append(ScheduledCall(float(delay_seconds), callback, args, kwargs))
+        self._metrics["queue_depth"] = len(self.calls)
+        self._metrics["queued_count"] += 1
+        self._metrics["max_queue_depth"] = max(self._metrics["max_queue_depth"], len(self.calls))
         return event_id
 
     def clear(self) -> None:
         self.clear_calls += 1
+        self._metrics["dropped_count"] += len(self.calls)
+        self.calls.clear()
 
     def stop(self) -> None:
         self.stop_calls += 1
 
     def run(self, index: int) -> None:
         scheduled = self.calls[index]
+        self._metrics["executed_count"] += 1
         scheduled.callback(*scheduled.args, **scheduled.kwargs)
+
+    def queue_depth(self) -> int:
+        return len(self.calls)
+
+    def metrics(self) -> dict[str, Any]:
+        snapshot = dict(self._metrics)
+        snapshot["queue_depth"] = len(self.calls)
+        return snapshot
 
 
 class FakeConfigStore:
@@ -48,6 +72,7 @@ class FakeConfigStore:
         self.root_dir = root_dir
         self._config = deepcopy(config or {})
         self.saved_configs: list[dict[str, Any]] = []
+        self._load_info = {"valid": True, "reason": "ok", "quarantined_to": None}
 
     def load(self) -> dict[str, Any]:
         return deepcopy(self._config)
@@ -59,6 +84,9 @@ class FakeConfigStore:
 
     def set_config(self, config: dict[str, Any]) -> None:
         self._config = deepcopy(config)
+
+    def load_info(self) -> dict[str, Any]:
+        return deepcopy(self._load_info)
 
 
 class FakePackInstaller:

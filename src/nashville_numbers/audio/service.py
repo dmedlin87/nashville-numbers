@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from .config import AudioConfigStore
+from .config import AudioConfigStore, InstallStateStore
 from .engine import FluidSynthEngine
 from .errors import AudioInstallError, AudioUnavailableError
 from .installer import DefaultPackInstaller, RuntimeInstaller
@@ -19,6 +19,7 @@ class AudioService:
     def __init__(
         self,
         config_store: AudioConfigStore | None = None,
+        install_state_store: InstallStateStore | None = None,
         installer: DefaultPackInstaller | None = None,
         engine_factory: type[FluidSynthEngine] = FluidSynthEngine,
         scheduler: EventScheduler | None = None,
@@ -26,6 +27,7 @@ class AudioService:
     ) -> None:
         self._lock = threading.RLock()
         self._config_store = config_store or AudioConfigStore()
+        self._install_state_store = install_state_store or InstallStateStore(self._config_store.root_dir)
         self._installer = installer or DefaultPackInstaller(self._config_store.root_dir)
         self._engine_factory = engine_factory
         self._scheduler = scheduler or EventScheduler()
@@ -33,29 +35,53 @@ class AudioService:
         self._engine: FluidSynthEngine | None = None
         self._status: dict[str, Any] = {
             "hq_ready": False,
+            "hq_requested": True,
             "engine": "unavailable",
             "reason": "init_error",
             "fallback": "web_tone",
+            "fallback_active": True,
+            "last_install_error": None,
             "pack": self._installer.status(),
         }
         self._config: dict[str, Any] = {}
+        self._self_check: dict[str, Any] = {}
+        self._max_sequence_events = 512
+        self._max_sequence_duration_ms = 180000
         self.refresh()
 
     def status(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "hq_ready": bool(self._status["hq_ready"]),
+                "hq_requested": bool(self._status.get("hq_requested", True)),
                 "engine": str(self._status["engine"]),
                 "reason": str(self._status["reason"]),
                 "fallback": "web_tone",
+                "fallback_active": bool(self._status.get("fallback_active", True)),
+                "last_install_error": self._status.get("last_install_error"),
+                "config_valid": bool(self._self_check.get("config_valid", True)),
+                "self_check": dict(self._self_check),
+                "scheduler": self._scheduler.metrics(),
+                "install_state": self._install_state_store.load(),
                 "pack": dict(self._status.get("pack", {})),
             }
 
     def refresh(self) -> dict[str, Any]:
         with self._lock:
             self._config = self._config_store.load()
+            config_info = self._config_store.load_info()
             self._status["pack"] = self._installer.status()
             self._teardown_engine_locked()
+            self._status["hq_requested"] = bool(self._config.get("enabled", True))
+            self._status["fallback_active"] = True
+            self._self_check = {
+                "config_valid": bool(config_info.get("valid", True)),
+                "config_reason": config_info.get("reason", "ok"),
+                "config_quarantined_to": config_info.get("quarantined_to"),
+                "soundfont_path": None,
+                "soundfont_readable": False,
+                "runtime": self.runtime_status(),
+            }
 
             if not bool(self._config.get("enabled", True)):
                 self._status.update({"hq_ready": False, "engine": "unavailable", "reason": "disabled"})
@@ -65,6 +91,8 @@ class AudioService:
             if soundfont_path is None:
                 self._status.update({"hq_ready": False, "engine": "unavailable", "reason": "missing_soundfont"})
                 return self.status()
+            self._self_check["soundfont_path"] = str(soundfont_path)
+            self._self_check["soundfont_readable"] = Path(str(soundfont_path)).exists()
 
             try:
                 engine = self._engine_factory(soundfont_path, self._config.get("quality"))
@@ -75,7 +103,9 @@ class AudioService:
                 self._status.update({"hq_ready": False, "engine": "unavailable", "reason": "init_error"})
             else:
                 self._engine = engine
-                self._status.update({"hq_ready": True, "engine": "fluidsynth", "reason": "ok"})
+                self._status.update(
+                    {"hq_ready": True, "engine": "fluidsynth", "reason": "ok", "fallback_active": False}
+                )
 
             return self.status()
 
@@ -86,7 +116,11 @@ class AudioService:
 
         try:
             soundfont_path = self._installer.install_default()
+            self._status["last_install_error"] = None
         except AudioInstallError:
+            self._record_install_state(
+                {"kind": "default_pack", "running": False, "error": self._status.get("last_install_error")}
+            )
             raise
         except Exception as exc:
             raise AudioInstallError("install_failed", f"Failed to install default sound pack: {exc}") from exc
@@ -94,6 +128,16 @@ class AudioService:
         config = self._config_store.load()
         config["soundfont_path"] = str(soundfont_path)
         self._config_store.save(config)
+        self._record_install_state(
+            {
+                "kind": "default_pack",
+                "running": False,
+                "result": {
+                    "soundfont_path": str(soundfont_path),
+                    "pack": self._installer.status(),
+                },
+            }
+        )
         return self.refresh()
 
     def install_runtime(self, on_progress=None) -> dict[str, Any]:
@@ -104,6 +148,7 @@ class AudioService:
                          RuntimeInstaller so callers can surface progress updates.
         """
         result = self._runtime_installer.install(on_progress=on_progress)
+        self._status["last_install_error"] = result.get("install_error")
         if result.get("python_binding"):
             if on_progress is not None:
                 try:
@@ -165,6 +210,7 @@ class AudioService:
     def play_sequence(self, events: list[dict[str, Any]], *, reset: bool = True) -> None:
         with self._lock:
             self._require_ready_locked()
+            self._validate_sequence(events)
             if reset:
                 self._scheduler.clear()
                 assert self._engine is not None
@@ -214,7 +260,8 @@ class AudioService:
                 return
             try:
                 self._engine.note_on(channel, midi, velocity)
-            except Exception:
+            except Exception as exc:
+                self._record_callback_error("note_on", exc)
                 return
 
     def _safe_note_off(self, channel: int, midi: int) -> None:
@@ -223,7 +270,8 @@ class AudioService:
                 return
             try:
                 self._engine.note_off(channel, midi)
-            except Exception:
+            except Exception as exc:
+                self._record_callback_error("note_off", exc)
                 return
 
     def _play_note_event(self, midi: int, velocity: int, duration_ms: int, channel: int) -> None:
@@ -254,8 +302,12 @@ class AudioService:
 
     def _resolve_soundfont_path_locked(self) -> str | Path | None:
         configured = self._config.get("soundfont_path")
-        if configured and Path(str(configured)).exists():
-            return str(configured)
+        if configured:
+            configured_path = Path(str(configured))
+            if configured_path.exists():
+                return str(configured_path)
+            self._self_check["soundfont_path"] = str(configured_path)
+            self._self_check["soundfont_readable"] = False
 
         pack_status = self._status.get("pack", {})
         pack_path = pack_status.get("path") if isinstance(pack_status, dict) else None
@@ -267,6 +319,38 @@ class AudioService:
         if self._engine is None or not bool(self._status.get("hq_ready")):
             reason = str(self._status.get("reason", "init_error"))
             raise AudioUnavailableError(reason, "High-quality audio engine is unavailable")
+
+    @property
+    def root_dir(self) -> Path:
+        return self._config_store.root_dir
+
+    def _record_install_state(self, payload: dict[str, Any]) -> None:
+        try:
+            self._install_state_store.save(payload)
+        except OSError:
+            return
+
+    def _record_callback_error(self, stage: str, exc: Exception) -> None:
+        self._status["last_install_error"] = f"{stage}: {exc}"
+
+    def _validate_sequence(self, events: list[dict[str, Any]]) -> None:
+        if len(events) > self._max_sequence_events:
+            raise AudioUnavailableError("overloaded", "Audio sequence exceeds queue limits")
+        if self._scheduler.queue_depth() > self._max_sequence_events:
+            raise AudioUnavailableError("overloaded", "Audio scheduler is overloaded")
+        total_notes = 0
+        max_end = 0
+        for event in events:
+            kind = str(event.get("kind", "")).lower()
+            delay_ms = max(0, int(event.get("delay_ms", 0)))
+            duration_ms = max(0, int(event.get("duration_ms", event.get("note_ms", 0))))
+            max_end = max(max_end, delay_ms + duration_ms)
+            if kind == "note":
+                total_notes += 1
+            elif kind == "chord":
+                total_notes += len(list(event.get("midis", [])))
+        if max_end > self._max_sequence_duration_ms or total_notes > self._max_sequence_events:
+            raise AudioUnavailableError("overloaded", "Audio sequence exceeds scheduler limits")
 
 
 _AUDIO_SERVICE: AudioService | None = None
