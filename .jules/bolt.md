@@ -4,3 +4,6 @@
 ## 2024-05-20 - Optimize String Tokenization with Regex
 **Learning:** Manual character-by-character parsing with a `while` loop in Python is computationally expensive due to interpreter overhead per iteration, especially for long input strings common in text processing.
 **Action:** Replace manual tokenization loops with compiled regular expressions (`re.split` or `re.finditer`) where possible, as they delegate the parsing logic to highly optimized C extensions.
+## 2024-05-21 - LRU Caching Pure Parsing and Conversion Functions
+**Learning:** In string-heavy parsing pipelines, applying `@functools.lru_cache` to pure functions like tokenization and standard string manipulation avoids re-running expensive regexes on identical inputs. Returning `tuple` from tokenizers instead of `list` prevents cached objects from being accidentally mutated by callers.
+**Action:** Identify pure functions handling repetitive inputs, wrap them with `@functools.lru_cache`, and ensure they return immutable structures (e.g. `tuple`, frozen dataclasses).

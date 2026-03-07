@@ -2,7 +2,7 @@ from nashville_numbers.parser import tokenize_progression, parse_input, Progress
 
 def test_tokenize_progression_nns():
     tokens = tokenize_progression("1 b3 1m 1/3 5(7)")
-    assert tokens == [
+    assert tokens == tuple([
         ProgressionToken("1", "nns"),
         ProgressionToken(" ", "separator"),
         ProgressionToken("b3", "nns"),
@@ -12,11 +12,11 @@ def test_tokenize_progression_nns():
         ProgressionToken("1/3", "nns"),
         ProgressionToken(" ", "separator"),
         ProgressionToken("5(7)", "nns"),
-    ]
+    ])
 
 def test_tokenize_progression_chords():
     tokens = tokenize_progression("C Am Bb/D Gmaj7")
-    assert tokens == [
+    assert tokens == tuple([
         ProgressionToken("C", "chord"),
         ProgressionToken(" ", "separator"),
         ProgressionToken("Am", "chord"),
@@ -24,11 +24,11 @@ def test_tokenize_progression_chords():
         ProgressionToken("Bb/D", "chord"),
         ProgressionToken(" ", "separator"),
         ProgressionToken("Gmaj7", "chord"),
-    ]
+    ])
 
 def test_tokenize_progression_separators():
     tokens = tokenize_progression("C,Am - Bb | D")
-    assert tokens == [
+    assert tokens == tuple([
         ProgressionToken("C", "chord"),
         ProgressionToken(",", "separator"),
         ProgressionToken("Am", "chord"),
@@ -36,11 +36,11 @@ def test_tokenize_progression_separators():
         ProgressionToken("Bb", "chord"),
         ProgressionToken(" | ", "separator"),
         ProgressionToken("D", "chord"),
-    ]
+    ])
 
 def test_tokenize_progression_whitespace_separators():
     tokens = tokenize_progression("1\t4\n5\r6")
-    assert tokens == [
+    assert tokens == tuple([
         ProgressionToken("1", "nns"),
         ProgressionToken("\t", "separator"),
         ProgressionToken("4", "nns"),
@@ -48,21 +48,21 @@ def test_tokenize_progression_whitespace_separators():
         ProgressionToken("5", "nns"),
         ProgressionToken("\r", "separator"),
         ProgressionToken("6", "nns"),
-    ]
+    ])
 
 def test_tokenize_progression_other():
     tokens = tokenize_progression("C xyz 1")
-    assert tokens == [
+    assert tokens == tuple([
         ProgressionToken("C", "chord"),
         ProgressionToken(" ", "separator"),
         ProgressionToken("xyz", "other"),
         ProgressionToken(" ", "separator"),
         ProgressionToken("1", "nns"),
-    ]
+    ])
 
 def test_tokenize_progression_empty():
-    assert tokenize_progression("") == []
-    assert tokenize_progression("   ") == [ProgressionToken("   ", "separator")]
+    assert tokenize_progression("") == ()
+    assert tokenize_progression("   ") == tuple([ProgressionToken("   ", "separator")])
 
 def test_parse_input_key_extraction():
     # in C
