@@ -5,8 +5,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-KEY_RE = re.compile(
-    r"(?:\b(?:in|key\s*:)\s*)([A-G](?:#|b)?)(m)?(?:\s*(major|minor|mode|ionian|aeolian|dorian|mixolydian|lydian|phrygian|locrian))?",
+KEY_MODE_PATTERN = r"major|minor|mode|ionian|aeolian|dorian|mixolydian|lydian|phrygian|locrian"
+KEY_CLAUSE_PATTERN = (
+    rf"(?P<tonic>[A-G](?:#|b)?)(?P<minor_suffix>m)?(?:\s+(?P<mode>{KEY_MODE_PATTERN}))?"
+)
+PREFIX_KEY_RE = re.compile(
+    rf"^(?:in|key\s*:)\s*{KEY_CLAUSE_PATTERN}(?=$|[;\n]|\s)",
+    re.IGNORECASE,
+)
+SUFFIX_KEY_RE = re.compile(
+    rf"(?<!\S)(?:in|key\s*:)\s*{KEY_CLAUSE_PATTERN}\s*$",
     re.IGNORECASE,
 )
 
@@ -41,6 +49,7 @@ class ProgressionToken:
 class ParsedInput:
     mode: str
     text: str
+    progression_text: str
     key_tonic: str | None
     key_mode: str | None
 
@@ -65,29 +74,62 @@ def tokenize_progression(text: str) -> list[ProgressionToken]:
     return tokens
 
 
+def _normalize_mode(match: re.Match[str]) -> str | None:
+    raw_mode = match.group("mode")
+    if match.group("minor_suffix"):
+        return "Minor"
+    if raw_mode:
+        return "Minor" if raw_mode.lower().startswith("min") or raw_mode.lower() == "aeolian" else "Major"
+    return None
+
+
+def _normalize_tonic(tonic: str) -> str:
+    return tonic[0].upper() + tonic[1:]
+
+
+def _normalize_progression(text: str) -> str:
+    return text.replace(";", " ").strip()
+
+
+def _extract_key_and_progression(text: str) -> tuple[str | None, str | None, str]:
+    if not text:
+        return None, None, ""
+
+    prefix_match = PREFIX_KEY_RE.match(text)
+    if prefix_match:
+        progression = text[prefix_match.end():].lstrip()
+        if progression.startswith(";"):
+            progression = progression[1:]
+        return (
+            _normalize_tonic(prefix_match.group("tonic")),
+            _normalize_mode(prefix_match),
+            _normalize_progression(progression),
+        )
+
+    suffix_match = SUFFIX_KEY_RE.search(text)
+    if suffix_match:
+        return (
+            _normalize_tonic(suffix_match.group("tonic")),
+            _normalize_mode(suffix_match),
+            _normalize_progression(text[:suffix_match.start()]),
+        )
+
+    return None, None, _normalize_progression(text)
+
+
 def parse_input(input_text: str) -> ParsedInput:
     text = input_text.strip()
-    key_match = KEY_RE.search(text)
-    tonic = None
-    mode = None
-    if key_match:
-        tonic = key_match.group(1)
-        has_m_suffix = bool(key_match.group(2))
-        raw_mode = key_match.group(3)
-        if has_m_suffix:
-            mode = "Minor"
-        elif raw_mode:
-            mode = (
-                "Minor"
-                if raw_mode.lower().startswith("min") or raw_mode.lower() == "aeolian"
-                else "Major"
-            )
-
-    progression = re.sub(r"\b(?:in|key\s*:)[^;\n]+", "", text, flags=re.IGNORECASE).replace(";", " ").strip()
+    tonic, mode, progression = _extract_key_and_progression(text)
     tokens = tokenize_progression(progression)
     nns_hits = sum(1 for token in tokens if token.kind == "nns")
     chord_hits = sum(1 for token in tokens if token.kind == "chord")
 
     detected_mode = "nns_to_chords" if (nns_hits > chord_hits or (nns_hits and tonic)) else "chords_to_nns"
 
-    return ParsedInput(mode=detected_mode, text=text, key_tonic=tonic, key_mode=mode)
+    return ParsedInput(
+        mode=detected_mode,
+        text=text,
+        progression_text=progression,
+        key_tonic=tonic,
+        key_mode=mode,
+    )
