@@ -3424,7 +3424,7 @@ function renderOutput(data) {
     const keyMode = (keyMatch && keyMatch[2].toLowerCase().startsWith('min')) ? "Minor" : "Major";
 
     html += `<div class="output-block">`;
-    html += `<span class="output-key interactive-token" onclick="handleTokenInteraction(this, {type:'key', keyTonic:'${keyTonic}', keyMode:'${keyMode}'})">${escapeHtml(keyLine)}</span>\n`;
+    html += `<span class="output-key interactive-token" role="button" tabindex="0" onclick="handleTokenInteraction(this, {type:'key', keyTonic:'${keyTonic}', keyMode:'${keyMode}'})" onkeydown="handleTokenKeydown(event, this, {type:'key', keyTonic:'${keyTonic}', keyMode:'${keyMode}'})">${escapeHtml(keyLine)}</span>\n`;
 
     progressionLines.forEach(line => {
       const tokens = line.split(/(\s+|[-|,|\|]|\/)/);
@@ -3449,7 +3449,7 @@ function renderOutput(data) {
             keyMode
           }).replace(/"/g, '&quot;');
 
-          html += `<span class="output-progression interactive-token" onclick="handleTokenInteraction(this, ${dataJson})">${escapeHtml(token)}</span>`;
+          html += `<span class="output-progression interactive-token" role="button" tabindex="0" onclick="handleTokenInteraction(this, ${dataJson})" onkeydown="handleTokenKeydown(event, this, ${dataJson})">${escapeHtml(token)}</span>`;
         } else {
           html += escapeHtml(token);
         }
@@ -4100,6 +4100,13 @@ function handleTokenInteraction(tokenEl, data) {
   if (data.type !== 'chord' && data.type !== 'nns') return;
   const midis = getChordMidiNotes(data, currentKey);
   if (midis.length > 0) playChordPreview(midis, 'strum', 28, 700, 96, 0);
+}
+
+function handleTokenKeydown(event, tokenEl, data) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    handleTokenInteraction(tokenEl, data);
+  }
 }
 
 // Keyboard shortcut
