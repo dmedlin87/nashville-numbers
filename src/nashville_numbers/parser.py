@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 from dataclasses import dataclass
 
@@ -54,8 +55,13 @@ class ParsedInput:
     key_mode: str | None
 
 
-def tokenize_progression(text: str) -> list[ProgressionToken]:
-    # ⚡ Bolt: Fast tokenization using regex split instead of manual looping
+# ⚡ Bolt: Caching pure tokenization function.
+# Parsing identical strings is expensive when splitting large progressions
+# during section inference or repeated conversions. Returns a tuple to prevent callers
+# from mutating the cached result.
+@functools.lru_cache(maxsize=1024)
+def tokenize_progression(text: str) -> tuple[ProgressionToken, ...]:
+    # Fast tokenization using regex split instead of manual looping
     tokens: list[ProgressionToken] = []
 
     for chunk in SEPARATOR_RE.split(text):
@@ -71,7 +77,7 @@ def tokenize_progression(text: str) -> list[ProgressionToken]:
             kind = "other"
         tokens.append(ProgressionToken(chunk, kind))
 
-    return tokens
+    return tuple(tokens)
 
 
 def _normalize_mode(match: re.Match[str]) -> str | None:
@@ -117,6 +123,9 @@ def _extract_key_and_progression(text: str) -> tuple[str | None, str | None, str
     return None, None, _normalize_progression(text)
 
 
+# ⚡ Bolt: Caching full input parsing.
+# The `ParsedInput` dataclass is frozen, making it safe to cache and return repeatedly.
+@functools.lru_cache(maxsize=1024)
 def parse_input(input_text: str) -> ParsedInput:
     text = input_text.strip()
     tonic, mode, progression = _extract_key_and_progression(text)

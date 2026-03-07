@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 
 from .output_contract import OutputBlock, build_output
@@ -107,6 +108,10 @@ def _normalize_explicit_key(tonic: str, mode: str) -> tuple[str, str]:
     return EXPLICIT_KEY_NORMALIZATION.get(mode, {}).get(tonic, tonic), mode
 
 
+# ⚡ Bolt: Cache pure conversion function.
+# This prevents re-parsing and string manipulation when
+# the exact same progression string and key are processed repeatedly.
+@functools.lru_cache(maxsize=1024)
 def _convert_chords_to_nns(prog: str, tonic: str, mode: str) -> str:
     t = NOTE_TO_SEMITONE.get(tonic, 0)
     degree_map = SEMITONE_TO_DEGREE
@@ -216,6 +221,8 @@ def _apply_diatonic_defaults(suffix: str, degree: str, mode: str, quality_raw: s
     return suffix
 
 
+# ⚡ Bolt: Cache pure conversion function.
+@functools.lru_cache(maxsize=1024)
 def _convert_nns_to_chords(prog: str, tonic: str, mode: str) -> str:
     out: list[str] = []
 
