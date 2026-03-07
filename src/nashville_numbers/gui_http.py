@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 import threading
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler
@@ -15,6 +16,7 @@ from .audio import AudioInstallError, AudioUnavailableError
 def build_handler(
     *,
     get_html: Callable[[], str],
+    get_request_token: Callable[[], str],
     get_audio_service: Callable[[], Any],
     convert_text: Callable[[str], str],
     plan_arrangement: Callable[..., dict[str, Any]],
@@ -23,6 +25,20 @@ def build_handler(
     runtime_install_lock: threading.Lock,
     run_runtime_install: Callable[[], None],
 ) -> type[BaseHTTPRequestHandler]:
+    protected_get_paths = {"/audio/status", "/audio/install-runtime/status"}
+    protected_post_paths = {
+        "/convert",
+        "/arrangement/plan",
+        "/audio/install-default",
+        "/audio/play-note",
+        "/audio/note-on",
+        "/audio/note-off",
+        "/audio/play-chord",
+        "/audio/play-sequence",
+        "/audio/panic",
+        "/audio/install-runtime",
+    }
+
     class Handler(BaseHTTPRequestHandler):
         """Minimal request handler serving the single-page app and a JSON API."""
 
@@ -31,6 +47,8 @@ def build_handler(
 
         def do_GET(self) -> None:
             parsed = urlparse(self.path)
+            if parsed.path in protected_get_paths and not self._require_request_token():
+                return
             if parsed.path in ("/", "/index.html"):
                 self._send_html(get_html())
             elif parsed.path == "/audio/status":
@@ -43,6 +61,8 @@ def build_handler(
 
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
+            if parsed.path in protected_post_paths and not self._require_request_token():
+                return
             if parsed.path == "/convert":
                 self._handle_convert()
                 return
@@ -90,6 +110,14 @@ def build_handler(
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
+
+        def _require_request_token(self) -> bool:
+            provided = self.headers.get("X-NNS-Request-Token")
+            expected = get_request_token()
+            if provided is None or not secrets.compare_digest(provided, expected):
+                self._send_json({"error": "Forbidden", "reason": "invalid_request_token"}, status=403)
+                return False
+            return True
 
         def _read_json_payload(self) -> dict[str, Any] | None:
             try:

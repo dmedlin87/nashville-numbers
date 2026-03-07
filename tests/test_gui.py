@@ -135,20 +135,35 @@ def _request(
         conn.close()
 
 
-def _post_json(port: int, path: str, payload: Any) -> tuple[int, dict[str, str], dict[str, Any]]:
+def _auth_headers(headers: dict[str, str] | None = None) -> dict[str, str]:
+    merged = {"X-NNS-Request-Token": gui._DEFAULT_APP.get_request_token()}
+    if headers:
+        merged.update(headers)
+    return merged
+
+
+def _post_json(
+    port: int, path: str, payload: Any, *, authenticated: bool = True
+) -> tuple[int, dict[str, str], dict[str, Any]]:
     body = json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if authenticated:
+        headers = _auth_headers(headers)
     status, headers, text = _request(
         port,
         "POST",
         path,
         body=body,
-        headers={"Content-Type": "application/json"},
+        headers=headers,
     )
     return status, headers, json.loads(text)
 
 
-def _get_json(port: int, path: str) -> tuple[int, dict[str, str], dict[str, Any]]:
-    status, headers, text = _request(port, "GET", path)
+def _get_json(
+    port: int, path: str, *, authenticated: bool = True
+) -> tuple[int, dict[str, str], dict[str, Any]]:
+    headers = _auth_headers() if authenticated else None
+    status, headers, text = _request(port, "GET", path, headers=headers)
     return status, headers, json.loads(text)
 
 
@@ -205,6 +220,9 @@ def test_get_root_serves_embedded_html(gui_server: int) -> None:
     assert status == 200
     assert "text/html" in headers["content-type"]
     assert "<title>Nashville Numbers</title>" in body
+    assert 'meta name="nns-request-token"' in body
+    assert gui._DEFAULT_APP.get_request_token() in body
+    assert "__NNS_REQUEST_TOKEN__" not in body
 
 
 def test_get_unknown_path_returns_not_found_json(gui_server: int) -> None:
@@ -217,7 +235,7 @@ def test_get_unknown_path_returns_not_found_json(gui_server: int) -> None:
 def test_get_audio_status_returns_current_audio_state(
     gui_server: int, fake_audio_service: _FakeAudioService
 ) -> None:
-    status, headers, body = _request(gui_server, "GET", "/audio/status")
+    status, headers, body = _request(gui_server, "GET", "/audio/status", headers=_auth_headers())
     assert status == 200
     assert "application/json" in headers["content-type"]
     payload = json.loads(body)
@@ -225,6 +243,12 @@ def test_get_audio_status_returns_current_audio_state(
     assert payload["reason"] == "missing_soundfont"
     assert payload["fallback"] == "web_tone"
     assert fake_audio_service.calls == [("status",)]
+
+
+def test_get_audio_status_requires_request_token(gui_server: int) -> None:
+    status, _headers, payload = _get_json(gui_server, "/audio/status", authenticated=False)
+    assert status == 403
+    assert payload == {"error": "Forbidden", "reason": "invalid_request_token"}
 
 
 def test_post_audio_install_default_success_returns_status(
@@ -328,7 +352,7 @@ def test_post_convert_rejects_invalid_json(gui_server: int) -> None:
         "POST",
         "/convert",
         body=b"{not-json",
-        headers={"Content-Type": "application/json"},
+        headers=_auth_headers({"Content-Type": "application/json"}),
     )
     assert status == 400
     assert json.loads(body) == {"error": "Invalid JSON in request body"}
@@ -344,6 +368,14 @@ def test_post_convert_rejects_empty_input(gui_server: int) -> None:
     status, _headers, payload = _post_json(gui_server, "/convert", {"input": "   "})
     assert status == 200
     assert payload == {"error": "Empty input"}
+
+
+def test_post_convert_requires_request_token(gui_server: int) -> None:
+    status, _headers, payload = _post_json(
+        gui_server, "/convert", {"input": "C F G"}, authenticated=False
+    )
+    assert status == 403
+    assert payload == {"error": "Forbidden", "reason": "invalid_request_token"}
 
 
 def test_post_arrangement_plan_returns_structured_plan(
@@ -399,7 +431,7 @@ def test_post_convert_enforces_payload_size_limit(gui_server: int, monkeypatch: 
         "POST",
         "/convert",
         body=b"",
-        headers={"Content-Type": "application/json", "Content-Length": "11"},
+        headers=_auth_headers({"Content-Type": "application/json", "Content-Length": "11"}),
     )
     payload = json.loads(body)
     assert status == 413
@@ -539,6 +571,34 @@ def test_find_free_port_raises_when_all_candidates_fail(monkeypatch: pytest.Monk
 
     with pytest.raises(OSError, match="Unable to find an available port"):
         gui._DEFAULT_APP.find_free_port(start=9000)
+
+
+def test_find_free_port_defaults_to_ephemeral_binding() -> None:
+    assert gui._DEFAULT_APP.find_free_port() == 0
+
+
+def test_start_server_uses_bound_port_for_ephemeral_binding(monkeypatch: pytest.MonkeyPatch) -> None:
+    started: list[bool] = []
+
+    class FakeServer:
+        server_address = ("127.0.0.1", 43210)
+
+    class FakeThread:
+        def start(self) -> None:
+            started.append(True)
+
+    fake_server = FakeServer()
+    fake_thread = FakeThread()
+
+    monkeypatch.setattr(gui._DEFAULT_APP, "create_server", lambda port: fake_server)
+    monkeypatch.setattr(gui._DEFAULT_APP, "create_thread", lambda target, args, daemon: fake_thread)
+
+    server, url, thread = gui._DEFAULT_APP.start_server(0)
+
+    assert server is fake_server
+    assert url == "http://127.0.0.1:43210"
+    assert thread is fake_thread
+    assert started == [True]
 
 
 def test_start_server_swallows_unexpected_errors() -> None:

@@ -4,13 +4,16 @@ Canonical agent guidance for this repository. All AI coding agents should follow
 
 ## Project Overview
 
-Nashville Numbers Converter - a Python package that converts between standard chord progressions and the Nashville Number System (NNS). Two entry points: a CLI (`nns-convert`) and a browser/native-window GUI (`nns-gui`).
+Nashville Numbers Converter - a Python package that converts between standard chord progressions and the Nashville Number System (NNS). Two entry points: a CLI (`nns-convert`) and a browser/native-window GUI (`nns-gui`). The GUI also includes a Music Lab arrangement/planning surface plus optional HQ audio playback helpers.
 
 ## Setup & Commands
 
 ```bash
 # Install in editable mode (use the .venv)
 pip install -e .
+
+# Optional HQ audio extras
+pip install -e ".[audio]"
 
 # Run tests
 pytest -q
@@ -33,7 +36,7 @@ No separate build step - the package is pure Python.
 
 ## Architecture
 
-The conversion pipeline flows through four modules:
+The core conversion pipeline flows through four modules:
 
 ```text
 user input
@@ -52,6 +55,21 @@ output_contract.py - formats one or more OutputBlock(tonic, mode, progression)
                      into the canonical "Key: X Y\n<progression>" string
 ```
 
+The GUI/runtime path layers on top of that core:
+
+```text
+gui.py        - owns GuiApp lifecycle, embedded HTML, pywebview/browser startup,
+|               lazy handler creation, and runtime-install job state
+v
+gui_http.py   - serves GET /, GET /audio/* status, POST /convert,
+|               POST /arrangement/plan, and POST /audio/* JSON endpoints
+v
+music_lab.py  - converts/infer keys into arrangement sections, bars, slots,
+|               groove presets, and transport metadata
+v
+audio/*       - optional HQ audio runtime/install, scheduling, and playback service
+```
+
 ### Mode detection (`parser.py`)
 
 `parse_input` counts NNS tokens vs chord tokens after stripping any key declaration. If NNS hits > chord hits, or if NNS tokens exist and a key is explicitly provided, the mode is `nns_to_chords`; otherwise `chords_to_nns`.
@@ -66,7 +84,7 @@ When no key is given for chords->NNS, the converter returns up to 3 key interpre
 
 ### GUI (`gui.py`)
 
-The entire front-end is a single embedded HTML string (`_HTML`) - no separate asset files. The Python layer is a minimal `http.server.BaseHTTPRequestHandler` serving `GET /` (the SPA) and `POST /convert` (JSON API calling `convert()`). `pywebview` is used for a native desktop window; if unavailable it falls back to `webbrowser.open`. The server enforces `MAX_INPUT_LENGTH = 1_000_000` and validates the JSON payload is a dict before accessing fields.
+The entire front-end is a single embedded HTML string (`_HTML`) - no separate asset files. `GuiApp` owns the HTTP server lifecycle, lazy handler construction, runtime-install job state, and native-window/browser fallback behavior. Request handling lives in `gui_http.py`, which serves `GET /`, `GET /audio/status`, `GET /audio/install-runtime/status`, `POST /convert`, `POST /arrangement/plan`, and several `POST /audio/*` playback/install endpoints. `music_lab.py` builds the arrangement timeline payload used by the Music Lab transport UI. The server enforces `MAX_INPUT_LENGTH = 1_000_000` and validates the JSON payload is a dict before accessing fields.
 
 ## Output Contract
 
@@ -88,11 +106,20 @@ Separators (` - `, ` | `, `,`, whitespace) are preserved verbatim in output. Tok
 | File                        | What it covers                                                                   |
 |-----------------------------|----------------------------------------------------------------------------------|
 | `test_conversion_golden.py` | End-to-end golden outputs for key conversion cases                               |
+| `test_converter_branches.py`| Additional converter branch coverage and ambiguity handling                      |
 | `test_parser.py`            | Tokenization and `parse_input` mode/key detection                                |
 | `test_key_inference.py`     | Scoring, ranking, section detection internals                                    |
+| `test_key_inference_branches.py` | Additional branch coverage in key inference                              |
+| `test_output_contract.py`   | Canonical `Key: ...` output formatting                                           |
 | `test_input_limit.py`       | `MAX_INPUT_LENGTH` enforcement                                                   |
 | `test_security.py`          | ReDoS safety: both parser regexes must complete in < 100ms on 5000-char payloads |
 | `test_spelling.py`          | Output format consistency                                                        |
 | `test_cli.py`               | CLI behaviour                                                                    |
+| `test_gui.py`               | GUI HTTP endpoints, runtime install job flow, and window/browser fallback        |
+| `test_music_lab.py`         | Arrangement planning, bar shaping, and NNS/chord transport metadata              |
+| `test_audio_service.py`     | `AudioService` orchestration, scheduler interaction, and install flows           |
+| `test_audio_engine.py`      | Audio engine wrapper behaviour                                                   |
+| `test_audio_installer.py`   | Runtime/SoundFont installer behaviour                                            |
+| `test_audio_scheduler.py`   | Timed scheduling primitives for playback                                         |
 
 Golden tests in `test_conversion_golden.py` are the primary regression guard - update them when intentionally changing output.

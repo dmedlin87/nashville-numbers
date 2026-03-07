@@ -6,6 +6,8 @@ No external dependencies required – uses only the standard library.
 
 from __future__ import annotations
 
+from html import escape as html_escape
+import secrets
 import socket
 import threading
 import webbrowser
@@ -18,6 +20,7 @@ from .gui_http import build_handler
 from .music_lab import build_progression_plan
 
 MAX_INPUT_LENGTH = 1_000_000  # 1MB
+_REQUEST_TOKEN_PLACEHOLDER = "__NNS_REQUEST_TOKEN__"
 
 def _new_runtime_install_job() -> dict[str, object]:
     return {
@@ -35,6 +38,7 @@ class GuiApp:
     def __init__(self, *, audio_service_factory: Callable[[], object] = get_audio_service) -> None:
         self._audio_service_factory = audio_service_factory
         self._audio_service: object | None = None
+        self._request_token = secrets.token_urlsafe(32)
         self.runtime_install_job = _new_runtime_install_job()
         self.runtime_install_lock = threading.Lock()
         self.handler_class: type | None = None
@@ -47,8 +51,11 @@ class GuiApp:
     def get_initialized_audio_service(self) -> object | None:
         return self._audio_service
 
+    def get_request_token(self) -> str:
+        return self._request_token
+
     def get_html(self) -> str:
-        return _HTML
+        return _HTML.replace(_REQUEST_TOKEN_PLACEHOLDER, html_escape(self._request_token, quote=True))
 
     def convert_text(self, input_text: str) -> str:
         return convert(input_text)
@@ -59,7 +66,9 @@ class GuiApp:
     def get_max_input_length(self) -> int:
         return MAX_INPUT_LENGTH
 
-    def find_free_port(self, start: int = 8765) -> int:
+    def find_free_port(self, start: int | None = None) -> int:
+        if start is None:
+            return 0
         for port in range(start, start + 100):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 try:
@@ -116,6 +125,7 @@ class GuiApp:
             return self.handler_class
         self.handler_class = build_handler(
             get_html=self.get_html,
+            get_request_token=self.get_request_token,
             get_audio_service=self.get_audio_service,
             convert_text=self.convert_text,
             plan_arrangement=self.plan_arrangement,
@@ -146,7 +156,8 @@ class GuiApp:
 
     def start_server(self, port: int) -> tuple[HTTPServer, str, threading.Thread]:
         server = self.create_server(port)
-        url = f"http://127.0.0.1:{port}"
+        _host, actual_port = getattr(server, "server_address", ("127.0.0.1", port))
+        url = f"http://127.0.0.1:{actual_port or port}"
         server_thread = self.create_thread(self.serve_server, (server,), daemon=True)
         server_thread.start()
         return server, url, server_thread
@@ -204,6 +215,7 @@ _HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="nns-request-token" content="__NNS_REQUEST_TOKEN__" />
 <title>Nashville Numbers</title>
 <style>
   /* ── Base ──────────────────────────────────────────────────────────────── */
@@ -2223,6 +2235,14 @@ function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+const REQUEST_TOKEN = document.querySelector('meta[name="nns-request-token"]')?.content || '';
+
+function appFetch(resource, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set('X-NNS-Request-Token', REQUEST_TOKEN);
+  return fetch(resource, { ...options, headers });
+}
+
 const MUSIC_LAB_GROOVES = {
   anthem: {
     id: 'anthem',
@@ -2423,7 +2443,7 @@ function updateAudioStatusUI() {
 
 async function refreshAudioStatus() {
   try {
-    const response = await fetch('/audio/status');
+    const response = await appFetch('/audio/status');
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'status failed');
     _setAudioState(payload);
@@ -2439,7 +2459,7 @@ async function installDefaultPack() {
   installInProgress = true;
   btn.classList.add('loading');
   try {
-    const response = await fetch('/audio/install-default', {
+    const response = await appFetch('/audio/install-default', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{}'
@@ -2508,7 +2528,7 @@ function _runtimeInstallFinished(result, error) {
 function _pollRuntimeInstall() {
   _runtimePollTimer = window.setTimeout(async () => {
     try {
-      const resp = await fetch('/audio/install-runtime/status');
+      const resp = await appFetch('/audio/install-runtime/status');
       const job = await resp.json();
       _updateRuntimeProgress(job.pct || 0, job.stage || '');
       if (job.running) {
@@ -2534,7 +2554,7 @@ async function installRuntime() {
   _updateRuntimeProgress(0, 'Starting…');
 
   try {
-    const response = await fetch('/audio/install-runtime', {
+    const response = await appFetch('/audio/install-runtime', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{}'
@@ -2552,7 +2572,7 @@ async function installRuntime() {
 
 async function _postAudio(endpoint, payload) {
   try {
-    const response = await fetch(endpoint, {
+    const response = await appFetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -2943,7 +2963,7 @@ async function buildArrangement(options = {}) {
   };
 
   try {
-    const response = await fetch('/arrangement/plan', {
+    const response = await appFetch('/arrangement/plan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -3205,7 +3225,7 @@ function doConvert() {
   const btn = document.getElementById('convertBtn');
   btn.classList.add('loading');
 
-  fetch('/convert', {
+  appFetch('/convert', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ input })

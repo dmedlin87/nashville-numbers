@@ -4,7 +4,7 @@
 
 ![Nashville Numbers Jukebox](content/nashville-numbers-jutebox.png)
 
-Talk to musicians the way musicians actually talk — in numbers. Throw in a chord progression, get back Nashville Numbers. Got a chart full of numbers and need real chords? Done. Works from the command line or a slick browser GUI, with zero setup beyond a single `pip install`.
+Talk to musicians the way musicians actually talk — in numbers. Throw in a chord progression, get back Nashville Numbers. Got a chart full of numbers and need real chords? Done. Works from the command line or a slick native-window/browser GUI, with zero setup beyond a single `pip install`.
 
 ---
 
@@ -43,7 +43,7 @@ The GUI includes:
 nns-gui
 ```
 
-Spins up a local server and pops open your browser automatically. No Electron, no npm, no drama — pure Python standard library.
+Starts the local HTTP app and opens a native `pywebview` window when available. If the desktop window cannot start, it falls back to your default browser. No Electron, no npm.
 
 ### Music Lab transport
 
