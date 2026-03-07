@@ -15,6 +15,7 @@ from nashville_numbers.audio.errors import AudioUnavailableError
 class _FakeSynth:
     def __init__(self) -> None:
         self.started_with: str | None = None
+        self.audio_driver: object | None = None
         self.sfload_path: str | None = None
         self.program_select_calls: list[tuple[int, int, int, int]] = []
         self.note_on_calls: list[tuple[int, int, int]] = []
@@ -28,6 +29,7 @@ class _FakeSynth:
 
     def start(self, driver: str | None = None) -> None:
         self.started_with = driver or "default"
+        self.audio_driver = object()
 
     def sfload(self, path: str) -> int:
         self.sfload_path = path
@@ -70,6 +72,24 @@ class _FakeFluidSynth(types.SimpleNamespace):
         synth = _FakeSynth()
         self.instances.append(synth)
         return synth
+
+
+class _FakeLogAwareFluidSynth(_FakeFluidSynth):
+    def __init__(self) -> None:
+        super().__init__()
+        self.default_callbacks = {level: object() for level in (1, 2, 3, 4)}
+        self.log_callbacks = dict(self.default_callbacks)
+        self.log_history: list[tuple[int, object | None]] = []
+
+    def fluid_set_log_function(self, level: int, callback: object | None, _data: object | None) -> object | None:
+        previous = self.log_callbacks[level]
+        self.log_callbacks[level] = callback
+        self.log_history.append((level, callback))
+        return previous
+
+    def Synth(self) -> _FakeSynth:  # noqa: N802 - mirrors library API
+        assert all(self.log_callbacks[level] is None for level in (1, 2, 3, 4))
+        return super().Synth()
 
 
 def test_engine_start_and_note_calls(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -173,6 +193,43 @@ def test_engine_import_tolerates_missing_windows_dll_hint(
         monkeypatch.delitem(sys.modules, "fluidsynth", raising=False)
 
 
+def test_engine_suppresses_fluidsynth_global_logs_during_startup(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_module = _FakeLogAwareFluidSynth()
+    monkeypatch.setitem(sys.modules, "fluidsynth", fake_module)
+
+    sf2 = tmp_path / "test.sf2"
+    sf2.write_bytes(b"fake")
+
+    engine = FluidSynthEngine(sf2, quality={})
+    engine.start()
+
+    assert fake_module.log_callbacks == fake_module.default_callbacks
+    assert len(fake_module.log_history) == 8
+
+
+def test_engine_raises_when_audio_driver_is_not_initialized(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class _NoAudioDriverSynth(_FakeSynth):
+        def start(self, driver: str | None = None) -> None:
+            self.started_with = driver or "default"
+            self.audio_driver = None
+
+    fake_module = _FakeFluidSynth()
+    fake_module.Synth = lambda: _NoAudioDriverSynth()  # type: ignore[method-assign]
+    monkeypatch.setitem(sys.modules, "fluidsynth", fake_module)
+
+    sf2 = tmp_path / "test.sf2"
+    sf2.write_bytes(b"fake")
+
+    engine = FluidSynthEngine(sf2, quality={})
+    with pytest.raises(AudioUnavailableError, match="audio output") as exc_info:
+        engine.start()
+    assert exc_info.value.code == "init_error"
+
+
 class TestStartOutputDriverSelection:
     """_start_output should pick a sensible default driver per platform."""
 
@@ -217,6 +274,7 @@ class TestStartOutputDriverSelection:
                     raise RuntimeError("driver not available")
                 # autodetect call — record None
                 self.started_with = None
+                self.audio_driver = object()
 
         fake_module = _FakeFluidSynth()
         fake_module.Synth = lambda: _RaisingOnFirstSynth()  # type: ignore[method-assign]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import os
 import platform
+from ctypes import CFUNCTYPE, c_int, c_void_p
 from pathlib import Path
 from threading import RLock
 from typing import Any
@@ -20,6 +21,8 @@ _PLATFORM_DRIVER_DEFAULTS: dict[str, str] = {
     "Darwin": "coreaudio",
     "Linux": "pulseaudio",
 }
+_FLUID_LOG_LEVELS_TO_SUPPRESS = (1, 2, 3, 4)
+_FLUID_LOG_LOCK = RLock()
 
 
 @contextlib.contextmanager
@@ -45,6 +48,66 @@ def _suppress_stderr():
         os.dup2(saved_fd, 2)
         os.close(saved_fd)
         os.close(devnull_fd)
+
+
+def _resolve_fluidsynth_log_setter(fluidsynth_module: Any):
+    """Return a callable compatible with fluid_set_log_function, if exposed."""
+
+    direct = getattr(fluidsynth_module, "fluid_set_log_function", None)
+    if callable(direct):
+        return direct
+
+    library = getattr(fluidsynth_module, "_fl", None)
+    if library is None:
+        return None
+
+    try:
+        return CFUNCTYPE(c_void_p, c_int, c_void_p, c_void_p)(("fluid_set_log_function", library))
+    except (AttributeError, OSError, TypeError, ValueError):
+        return None
+
+
+@contextlib.contextmanager
+def _suppress_fluidsynth_logs(fluidsynth_module: Any):
+    """Temporarily silence FluidSynth's global logger during engine start-up.
+
+    On Windows, recent FluidSynth builds log directly through their own global
+    logger instead of fd 2, so redirecting stderr alone does not hide the
+    cosmetic SDL3 and missing-MIDI messages emitted while probing drivers.
+    """
+
+    setter = _resolve_fluidsynth_log_setter(fluidsynth_module)
+    if setter is None:
+        yield
+        return
+
+    previous: dict[int, Any] = {}
+    with _FLUID_LOG_LOCK:
+        try:
+            for level in _FLUID_LOG_LEVELS_TO_SUPPRESS:
+                previous[level] = setter(level, None, None)
+        except Exception:
+            for level, callback in previous.items():
+                with contextlib.suppress(Exception):
+                    setter(level, callback, None)
+            yield
+            return
+
+        try:
+            yield
+        finally:
+            for level, callback in previous.items():
+                with contextlib.suppress(Exception):
+                    setter(level, callback, None)
+
+
+@contextlib.contextmanager
+def _suppress_fluidsynth_startup_noise(fluidsynth_module: Any):
+    """Silence harmless FluidSynth startup noise while preserving Python errors."""
+
+    with _suppress_fluidsynth_logs(fluidsynth_module):
+        with _suppress_stderr():
+            yield
 
 
 class FluidSynthEngine:
@@ -80,8 +143,9 @@ class FluidSynthEngine:
             if self._synth is not None:
                 return
 
-            synth = self._fluidsynth.Synth()
-            self._start_output(synth)
+            with _suppress_fluidsynth_startup_noise(self._fluidsynth):
+                synth = self._fluidsynth.Synth()
+                self._start_output(synth)
             sfid = synth.sfload(str(self.soundfont_path))
             if sfid == -1:
                 synth.delete()
@@ -98,18 +162,23 @@ class FluidSynthEngine:
         driver = self.quality.get("driver") or _PLATFORM_DRIVER_DEFAULTS.get(platform.system())
         if driver:
             try:
-                with _suppress_stderr():
-                    synth.start(driver=str(driver))
+                synth.start(driver=str(driver))
+                self._ensure_audio_driver_started(synth)
                 return
             except Exception:
                 pass  # fall through to unguided start
 
         try:
-            with _suppress_stderr():
-                synth.start()
+            synth.start()
         except TypeError:
-            with _suppress_stderr():
-                synth.start(driver="dsound")
+            synth.start(driver="dsound")
+        self._ensure_audio_driver_started(synth)
+
+    def _ensure_audio_driver_started(self, synth: Any) -> None:
+        """Raise a Python error when FluidSynth failed to create audio output."""
+
+        if hasattr(synth, "audio_driver") and not getattr(synth, "audio_driver"):
+            raise AudioUnavailableError("init_error", "Failed to initialize FluidSynth audio output")
 
     def _configure_effects(self, synth: Any) -> None:
         reverb = self.quality.get("reverb")

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nns-gui",
+      "runtimeExecutable": "nns-gui",
+      "runtimeArgs": [],
+      "port": 8765
+    }
+  ]
+}

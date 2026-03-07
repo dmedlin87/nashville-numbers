@@ -268,11 +268,16 @@ _HTML = r"""<!DOCTYPE html>
     --accent2:     #5e3de8;
     --glow:        rgba(124, 92, 252, 0.45);
     --text:        #e8e8ff;
-    --text-muted:  #8a8aaa;
+    --text-muted:  #a0a0c0;
     --success:     #4ade80;
     --error:       #f87171;
     --border:      rgba(124, 92, 252, 0.25);
+    --radius-sm:   6px;
+    --radius-md:   10px;
+    --radius-lg:   14px;
     --radius:      14px;
+    --ls-tight:    0.04em;
+    --ls-wide:     0.1em;
     --font:        'Segoe UI', system-ui, -apple-system, sans-serif;
     --font-mono:   'Fira Code', 'Cascadia Code', 'Consolas', monospace;
     --transition:  0.22s cubic-bezier(0.4, 0, 0.2, 1);
@@ -359,14 +364,14 @@ _HTML = r"""<!DOCTYPE html>
   .tagline {
     color: var(--text-muted);
     font-size: 0.95rem;
-    letter-spacing: 0.03em;
+    letter-spacing: var(--ls-tight);
   }
 
   /* ── Card ───────────────────────────────────────────────────────────────── */
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-lg);
     padding: var(--card-pad);
     width: 100%;
     max-width: none;
@@ -387,9 +392,9 @@ _HTML = r"""<!DOCTYPE html>
   /* ── Section labels ─────────────────────────────────────────────────────── */
   .section-label {
     display: block;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    letter-spacing: 0.12em;
+    letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     color: var(--text-muted);
     margin-bottom: 0.55rem;
@@ -406,7 +411,7 @@ _HTML = r"""<!DOCTYPE html>
     min-height: 110px;
     background: var(--surface2);
     border: 1.5px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     color: var(--text);
     font-family: var(--font-mono);
     font-size: 1.05rem;
@@ -418,7 +423,7 @@ _HTML = r"""<!DOCTYPE html>
     caret-color: var(--accent);
   }
 
-  textarea::placeholder { color: var(--text-muted); opacity: 0.7; }
+  textarea::placeholder { color: var(--text-muted); }
 
   textarea:focus {
     border-color: var(--accent);
@@ -444,9 +449,9 @@ _HTML = r"""<!DOCTYPE html>
     color: #fff;
     font-size: 0.95rem;
     font-weight: 700;
-    letter-spacing: 0.03em;
+    letter-spacing: var(--ls-tight);
     border: none;
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     padding: 0.7rem 1.6rem;
     cursor: pointer;
     transition:
@@ -480,7 +485,7 @@ _HTML = r"""<!DOCTYPE html>
     flex: 0 0 auto;
     background: transparent;
     border: 1.5px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     color: var(--text-muted);
     font-size: 0.88rem;
     padding: 0.65rem 1rem;
@@ -508,7 +513,7 @@ _HTML = r"""<!DOCTYPE html>
     background: var(--surface2);
     border: 1px solid rgba(255,255,255,0.1);
     border-bottom-width: 2px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     padding: 0.1em 0.4em;
     font-family: var(--font-mono);
     font-size: 0.8em;
@@ -523,7 +528,7 @@ _HTML = r"""<!DOCTYPE html>
   .output-box {
     background: var(--surface2);
     border: 1.5px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     padding: 0.85rem 1rem;
     font-family: var(--font-mono);
     font-size: 1.05rem;
@@ -563,7 +568,6 @@ _HTML = r"""<!DOCTYPE html>
   .output-placeholder {
     color: var(--text-muted);
     font-style: italic;
-    opacity: 0.5;
     font-family: var(--font);
     font-size: 0.92rem;
   }
@@ -575,7 +579,7 @@ _HTML = r"""<!DOCTYPE html>
     right: 0.6rem;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     color: var(--text-muted);
     font-size: 0.78rem;
     padding: 0.3rem 0.65rem;
@@ -585,10 +589,14 @@ _HTML = r"""<!DOCTYPE html>
     pointer-events: none;
   }
 
+  .output-box.has-result .btn-copy {
+    opacity: 0.45;
+    pointer-events: auto;
+  }
+
   .output-box.has-result:hover .btn-copy,
   .output-box.has-result .btn-copy:focus {
     opacity: 1;
-    pointer-events: auto;
   }
 
   .btn-copy:hover { background: var(--surface2); color: var(--text); }
@@ -601,9 +609,9 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .examples-header {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    letter-spacing: 0.12em;
+    letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     color: var(--text-muted);
     margin-bottom: 0.75rem;
@@ -619,7 +627,7 @@ _HTML = r"""<!DOCTYPE html>
   .example-chip {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 9px;
+    border-radius: var(--radius-md);
     padding: 0.65rem 0.9rem;
     cursor: pointer;
     transition: border-color var(--transition), background var(--transition), transform var(--transition), box-shadow var(--transition);
@@ -643,9 +651,9 @@ _HTML = r"""<!DOCTYPE html>
   .example-chip:active { transform: translateY(0); }
 
   .chip-label {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    letter-spacing: 0.1em;
+    letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     color: var(--accent);
     margin-bottom: 0.25rem;
@@ -666,7 +674,6 @@ _HTML = r"""<!DOCTYPE html>
     color: var(--text-muted);
     font-size: 0.78rem;
     text-align: center;
-    opacity: 0.5;
     user-select: none;
   }
 
@@ -711,9 +718,9 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .audio-status-pill {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--ls-tight);
     border: 1px solid var(--border);
     border-radius: 999px;
     padding: 0.24rem 0.65rem;
@@ -743,7 +750,7 @@ _HTML = r"""<!DOCTYPE html>
   .audio-install-btn {
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     color: var(--text-muted);
     font-size: 0.75rem;
     font-weight: 700;
@@ -801,16 +808,16 @@ _HTML = r"""<!DOCTYPE html>
     gap: 0.5rem;
     background: var(--surface2);
     padding: 0.35rem 0.75rem;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
   }
 
   .fb-group label {
-    font-size: 0.65rem;
+    font-size: 0.7rem;
     font-weight: 800;
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: var(--ls-tight);
   }
 
   .fb-select {
@@ -831,17 +838,17 @@ _HTML = r"""<!DOCTYPE html>
     gap: 0.4rem;
     background: var(--surface2);
     padding: 0.35rem 0.75rem;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     flex-wrap: wrap;
   }
 
   .fb-filter-group-label {
-    font-size: 0.65rem;
+    font-size: 0.7rem;
     font-weight: 800;
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: var(--ls-tight);
     margin-right: 0.25rem;
     white-space: nowrap;
   }
@@ -853,7 +860,7 @@ _HTML = r"""<!DOCTYPE html>
     font-size: 0.75rem;
     font-weight: 700;
     padding: 0.2rem 0.6rem;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all var(--transition);
   }
@@ -871,14 +878,14 @@ _HTML = r"""<!DOCTYPE html>
     margin-top: 0.25rem;
     background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(0,0,0,0.12));
     border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
   }
 
   .fretboard {
     position: relative;
     background: #1e1e1e;
     border: 4px solid #3a3a3a;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     height: 160px;
     width: 100%;
     min-width: 0;
@@ -959,9 +966,10 @@ _HTML = r"""<!DOCTYPE html>
 
   .interactive-token {
     cursor: pointer;
-    border-bottom: 1px dashed transparent;
+    border-bottom: 1px dashed rgba(124, 92, 252, 0.3);
     transition: border-color 0.2s, background 0.2s;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
+    padding: 0.05em 0.15em;
   }
   .interactive-token:hover {
     border-bottom-color: currentColor;
@@ -1036,7 +1044,7 @@ _HTML = r"""<!DOCTYPE html>
     gap: 0.2rem;
     margin-bottom: 1rem;
     background: var(--surface2);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     padding: 0.2rem;
     border: 1px solid var(--border);
   }
@@ -1048,10 +1056,10 @@ _HTML = r"""<!DOCTYPE html>
     color: var(--text-muted);
     font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     padding: 0.45rem 1rem;
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all var(--transition);
     font-family: inherit;
@@ -1076,7 +1084,7 @@ _HTML = r"""<!DOCTYPE html>
     display: flex;
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
   }
 
@@ -1086,7 +1094,7 @@ _HTML = r"""<!DOCTYPE html>
     color: var(--text-muted);
     font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--ls-tight);
     padding: 0.45rem 0.9rem;
     cursor: pointer;
     transition: all var(--transition);
@@ -1103,9 +1111,9 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .key-label {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    letter-spacing: 0.1em;
+    letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     color: var(--text-muted);
   }
@@ -1113,7 +1121,7 @@ _HTML = r"""<!DOCTYPE html>
   .key-select {
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     color: var(--text);
     font-size: 0.85rem;
     font-weight: 600;
@@ -1131,7 +1139,7 @@ _HTML = r"""<!DOCTYPE html>
     min-height: 46px;
     background: var(--surface2);
     border: 1.5px dashed var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     padding: 0.5rem 0.7rem;
     margin-bottom: 0.6rem;
     transition: border-color var(--transition);
@@ -1146,7 +1154,6 @@ _HTML = r"""<!DOCTYPE html>
     color: var(--text-muted);
     font-size: 0.82rem;
     font-style: italic;
-    opacity: 0.55;
     user-select: none;
   }
 
@@ -1156,7 +1163,7 @@ _HTML = r"""<!DOCTYPE html>
     gap: 0.25rem;
     background: var(--accent2);
     color: #fff;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     font-family: var(--font-mono);
     font-size: 0.9rem;
     font-weight: 700;
@@ -1178,9 +1185,10 @@ _HTML = r"""<!DOCTYPE html>
     border: none;
     color: rgba(255,255,255,0.5);
     cursor: pointer;
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     line-height: 1;
-    padding: 0 0.05rem;
+    padding: 0.35rem 0.3rem;
+    margin: -0.25rem -0.2rem -0.25rem 0;
     transition: color var(--transition);
     font-family: inherit;
   }
@@ -1206,7 +1214,7 @@ _HTML = r"""<!DOCTYPE html>
   .sep-btn {
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     color: var(--text-muted);
     font-family: var(--font-mono);
     font-size: 0.88rem;
@@ -1226,7 +1234,7 @@ _HTML = r"""<!DOCTYPE html>
   .btn-undo {
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     color: var(--text-muted);
     font-size: 0.78rem;
     padding: 0.35rem 0.7rem;
@@ -1239,9 +1247,9 @@ _HTML = r"""<!DOCTYPE html>
 
   /* ── Palette labels ──────────────────────────────────────────────────────── */
   .palette-label {
-    font-size: 0.64rem;
+    font-size: 0.75rem;
     font-weight: 800;
-    letter-spacing: 0.1em;
+    letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     color: var(--text-muted);
     margin-bottom: 0.4rem;
@@ -1258,14 +1266,15 @@ _HTML = r"""<!DOCTYPE html>
   .note-btn {
     background: var(--surface2);
     border: 1.5px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     color: var(--text);
     font-family: var(--font-mono);
     font-size: 0.9rem;
     font-weight: 700;
     padding: 0.5rem 0.6rem;
     cursor: pointer;
-    min-width: 40px;
+    min-width: 44px;
+    min-height: 44px;
     text-align: center;
     transition: all var(--transition);
   }
@@ -1305,19 +1314,18 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .acc-col-label {
-    font-size: 0.58rem;
+    font-size: 0.7rem;
     font-weight: 800;
-    letter-spacing: 0.08em;
+    letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     color: var(--text-muted);
     margin-bottom: 0.1rem;
-    opacity: 0.6;
   }
 
   .num-btn {
     background: var(--surface2);
     border: 1.5px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     color: var(--text);
     font-family: var(--font-mono);
     font-size: 1.15rem;
@@ -1344,7 +1352,7 @@ _HTML = r"""<!DOCTYPE html>
   .acc-btn {
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     color: var(--text-muted);
     font-family: var(--font-mono);
     font-size: 0.8rem;
@@ -1373,7 +1381,7 @@ _HTML = r"""<!DOCTYPE html>
   .quality-btn {
     background: var(--surface2);
     border: 1.5px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     color: var(--text-muted);
     font-family: var(--font-mono);
     font-size: 0.78rem;
@@ -1397,9 +1405,9 @@ _HTML = r"""<!DOCTYPE html>
 
   /* ── Music Lab ──────────────────────────────────────────────────────────── */
   .music-lab-section {
-    margin-top: 1.9rem;
-    padding-top: 1.5rem;
-    border-top: 1px dashed var(--border);
+    margin-top: clamp(2.5rem, 5vh, 4rem);
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
   }
 
   .music-lab-header {
@@ -1434,12 +1442,12 @@ _HTML = r"""<!DOCTYPE html>
 
   .lab-pill {
     border-radius: 999px;
-    border: 1px solid rgba(124, 92, 252, 0.32);
-    background: rgba(124, 92, 252, 0.1);
-    color: #d9d5ff;
-    font-size: 0.68rem;
+    border: 1px solid rgba(124, 92, 252, 0.22);
+    background: rgba(124, 92, 252, 0.06);
+    color: var(--text-muted);
+    font-size: 0.7rem;
     font-weight: 800;
-    letter-spacing: 0.08em;
+    letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     padding: 0.35rem 0.72rem;
   }
@@ -1456,7 +1464,7 @@ _HTML = r"""<!DOCTYPE html>
       linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0)),
       var(--surface2);
     border: 1px solid rgba(124, 92, 252, 0.2);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     padding: 1rem;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
   }
@@ -1470,7 +1478,7 @@ _HTML = r"""<!DOCTYPE html>
 
   .lab-stat {
     border: 1px solid rgba(124, 92, 252, 0.16);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     background: rgba(13, 13, 26, 0.36);
     padding: 0.75rem 0.8rem;
     min-height: 94px;
@@ -1478,9 +1486,9 @@ _HTML = r"""<!DOCTYPE html>
 
   .lab-stat-label {
     display: block;
-    font-size: 0.63rem;
+    font-size: 0.7rem;
     font-weight: 800;
-    letter-spacing: 0.1em;
+    letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     color: var(--text-muted);
     margin-bottom: 0.45rem;
@@ -1522,9 +1530,9 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .lab-field-label {
-    font-size: 0.66rem;
+    font-size: 0.7rem;
     font-weight: 800;
-    letter-spacing: 0.09em;
+    letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     color: var(--text-muted);
   }
@@ -1534,7 +1542,7 @@ _HTML = r"""<!DOCTYPE html>
     width: 100%;
     background: rgba(13, 13, 26, 0.5);
     border: 1px solid rgba(124, 92, 252, 0.25);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     color: var(--text);
     font-family: var(--font);
     font-size: 0.95rem;
@@ -1556,7 +1564,7 @@ _HTML = r"""<!DOCTYPE html>
     justify-content: space-between;
     gap: 0.8rem;
     border: 1px solid rgba(124, 92, 252, 0.22);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     background: rgba(13, 13, 26, 0.46);
     padding: 0.7rem 0.8rem;
     margin-bottom: 1rem;
@@ -1592,7 +1600,7 @@ _HTML = r"""<!DOCTYPE html>
 
   .groove-card {
     border: 1px solid rgba(124, 92, 252, 0.18);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     background: rgba(13, 13, 26, 0.36);
     color: var(--text);
     padding: 0.75rem;
@@ -1643,12 +1651,12 @@ _HTML = r"""<!DOCTYPE html>
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     border: 1px solid rgba(124, 92, 252, 0.28);
     padding: 0.65rem 0.95rem;
     font-size: 0.84rem;
     font-weight: 800;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--ls-tight);
     cursor: pointer;
     transition: all var(--transition);
     font-family: inherit;
@@ -1685,7 +1693,7 @@ _HTML = r"""<!DOCTYPE html>
 
   .lab-transport-status {
     margin-top: 0.85rem;
-    border-radius: 11px;
+    border-radius: var(--radius-md);
     border: 1px solid rgba(124, 92, 252, 0.16);
     background: rgba(13, 13, 26, 0.46);
     padding: 0.7rem 0.8rem;
@@ -1716,7 +1724,7 @@ _HTML = r"""<!DOCTYPE html>
   .arrangement-placeholder {
     min-height: 240px;
     border: 1px dashed rgba(124, 92, 252, 0.25);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     background:
       radial-gradient(circle at top right, rgba(124, 92, 252, 0.13), transparent 42%),
       rgba(13, 13, 26, 0.4);
@@ -1740,7 +1748,7 @@ _HTML = r"""<!DOCTYPE html>
 
   .timeline-section {
     border: 1px solid rgba(124, 92, 252, 0.18);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     background: rgba(13, 13, 26, 0.34);
     padding: 0.85rem;
   }
@@ -1771,7 +1779,7 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .timeline-bar {
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     border: 1px solid rgba(124, 92, 252, 0.12);
     background: rgba(28, 28, 56, 0.72);
     padding: 0.72rem;
@@ -1786,9 +1794,9 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .timeline-bar-label {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 800;
-    letter-spacing: 0.08em;
+    letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     color: var(--text-muted);
   }
@@ -1806,7 +1814,7 @@ _HTML = r"""<!DOCTYPE html>
 
   .timeline-slot {
     width: 100%;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     border: 1px solid rgba(124, 92, 252, 0.14);
     background: rgba(13, 13, 26, 0.45);
     color: var(--text);
@@ -1851,7 +1859,7 @@ _HTML = r"""<!DOCTYPE html>
 
   .timeline-slot-timing {
     color: var(--text-muted);
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 700;
   }
 
@@ -1861,7 +1869,7 @@ _HTML = r"""<!DOCTYPE html>
     gap: 0.6rem;
     flex-wrap: wrap;
     color: var(--text-muted);
-    font-size: 0.72rem;
+    font-size: 0.7rem;
   }
 
   .runway-grid {
@@ -1872,7 +1880,7 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .runway-card {
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     border: 1px solid rgba(124, 92, 252, 0.16);
     background: rgba(13, 13, 26, 0.36);
     padding: 0.82rem;
@@ -1880,11 +1888,11 @@ _HTML = r"""<!DOCTYPE html>
 
   .runway-label {
     display: block;
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 800;
-    letter-spacing: 0.1em;
+    letter-spacing: var(--ls-wide);
     text-transform: uppercase;
-    color: #c4b5fd;
+    color: var(--text-muted);
     margin-bottom: 0.35rem;
   }
 
@@ -1900,6 +1908,69 @@ _HTML = r"""<!DOCTYPE html>
     color: var(--text-muted);
     font-size: 0.74rem;
     line-height: 1.45;
+  }
+
+  .runway-card {
+    opacity: 0.55;
+    position: relative;
+  }
+
+  .runway-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.15rem 0.45rem;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+  }
+
+  /* ── Music Lab muted hierarchy ─────────────────────────────────────────── */
+  .music-lab-section .lab-panel {
+    border-color: rgba(124, 92, 252, 0.12);
+  }
+
+  .music-lab-section .btn-transport.primary {
+    box-shadow: 0 4px 16px rgba(124, 92, 252, 0.2);
+  }
+
+  /* ── Tab subtitles ─────────────────────────────────────────────────────── */
+  .tab-subtitle {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+  }
+
+  .tab-btn.active .tab-subtitle {
+    color: rgba(255,255,255,0.7);
+  }
+
+  /* ── Key row disabled state ────────────────────────────────────────────── */
+  .key-row.disabled {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  .key-row.disabled .key-label::after {
+    content: ' (auto)';
+    font-weight: 400;
+    text-transform: none;
+  }
+
+  /* ── Staged chord preview ──────────────────────────────────────────────── */
+  .prog-chip.staged {
+    background: rgba(124, 92, 252, 0.15);
+    border: 1.5px dashed var(--accent);
+    color: var(--text-muted);
+    animation: none;
   }
 
   @media (max-width: 1180px) {
@@ -1945,8 +2016,8 @@ _HTML = r"""<!DOCTYPE html>
 
     <!-- Input tabs -->
     <div class="input-tabs" role="tablist" aria-label="Input method">
-      <button class="tab-btn active" id="tabBuilder" role="tab" aria-selected="true" aria-controls="panelBuilder" onclick="switchInputTab('builder')">Builder</button>
-      <button class="tab-btn" id="tabText" role="tab" aria-selected="false" aria-controls="panelText" onclick="switchInputTab('text')">Text</button>
+      <button class="tab-btn active" id="tabBuilder" role="tab" aria-selected="true" aria-controls="panelBuilder" onclick="switchInputTab('builder')">Builder<span class="tab-subtitle">Build chords by clicking</span></button>
+      <button class="tab-btn" id="tabText" role="tab" aria-selected="false" aria-controls="panelText" onclick="switchInputTab('text')">Text<span class="tab-subtitle">Type chords directly</span></button>
     </div>
 
     <!-- Builder panel -->
@@ -1958,7 +2029,7 @@ _HTML = r"""<!DOCTYPE html>
           <button class="mode-btn active" id="modeChordsBtn" onclick="setBuilderMode('chords')" aria-pressed="true">Chords &rarr; NNS</button>
           <button class="mode-btn" id="modeNnsBtn" onclick="setBuilderMode('nns')" aria-pressed="false">NNS &rarr; Chords</button>
         </div>
-        <div class="key-row" id="keyRow" style="display:none" aria-label="Key selection">
+        <div class="key-row disabled" id="keyRow" aria-label="Key selection">
           <span class="key-label">Key</span>
           <select id="keyNote" class="key-select" aria-label="Key note">
             <option>C</option><option>C#</option><option>Db</option><option>D</option>
@@ -2150,17 +2221,17 @@ _HTML = r"""<!DOCTYPE html>
           <div class="section-label" style="margin:1rem 0 0.5rem">Expansion Runway</div>
           <div class="runway-grid">
             <div class="runway-card">
-              <span class="runway-label">Live Input</span>
+              <span class="runway-label">Live Input <span class="runway-badge">Coming Soon</span></span>
               <span class="runway-title">Practice Rig</span>
               <span class="runway-copy">Use the same chart and fretboard targets as the future monitoring surface for real guitar or bass input.</span>
             </div>
             <div class="runway-card">
-              <span class="runway-label">Tone Browser</span>
+              <span class="runway-label">Tone Browser <span class="runway-badge">Coming Soon</span></span>
               <span class="runway-title">Tone Slots</span>
               <span class="runway-copy">This transport is the place to hang starter tones, user-imported NAM captures, and section-specific tone swaps.</span>
             </div>
             <div class="runway-card">
-              <span class="runway-label">Export</span>
+              <span class="runway-label">Export <span class="runway-badge">Coming Soon</span></span>
               <span class="runway-title">Re-Amp Hand-Off</span>
               <span class="runway-copy">The bar map and groove data are structured so stem export and later re-amp workflows can sit on top without re-parsing the chart.</span>
             </div>
@@ -3596,17 +3667,31 @@ function setBuilderMode(mode) {
   document.getElementById('modeNnsBtn').setAttribute('aria-pressed', !isChords);
   document.getElementById('chordBuilder').style.display = isChords ? '' : 'none';
   document.getElementById('nnsBuilder').style.display = isChords ? 'none' : '';
-  document.getElementById('keyRow').style.display = isChords ? 'none' : '';
+  document.getElementById('keyRow').classList.toggle('disabled', isChords);
   resetStage();
 }
 
 function selectNote(note, btn) {
   stagedNote = note;
+  document.querySelectorAll('.note-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updateStageDisplay();
+  // Auto-commit with current quality
   commitStaged();
 }
 
 function updateStageDisplay() {
-  // Stage display removed; no-op kept for call-site compatibility.
+  const track = document.getElementById('progressionTrack');
+  if (!track) return;
+  // Remove any existing staged preview
+  const existing = track.querySelector('.prog-chip.staged');
+  if (existing) existing.remove();
+  if (!stagedNote) return;
+  // Show staged preview chip
+  const preview = document.createElement('span');
+  preview.className = 'prog-chip staged';
+  preview.textContent = stagedNote + (stagedQuality || '') + ' \u2026';
+  track.appendChild(preview);
 }
 
 function commitStaged() {
@@ -3937,6 +4022,10 @@ function getChordMidiNotes(chord, key) {
 }
 
 function wireFretDotAudio(dot, midiVal) {
+  dot.setAttribute('tabindex', '0');
+  dot.setAttribute('role', 'button');
+  dot.setAttribute('aria-label', 'Play note ' + midiVal);
+
   const release = (pointerId) => {
     if (!activeFretPointers.has(pointerId)) return;
     const midi = activeFretPointers.get(pointerId);
@@ -3955,6 +4044,13 @@ function wireFretDotAudio(dot, midiVal) {
   dot.addEventListener('pointercancel', (event) => release(event.pointerId));
   dot.addEventListener('pointerleave', (event) => release(event.pointerId));
   dot.addEventListener('lostpointercapture', (event) => release(event.pointerId));
+
+  dot.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      playNotePreview(midiVal, 96, 450, 0);
+    }
+  });
 }
 
 function toggleDegree(d) {
