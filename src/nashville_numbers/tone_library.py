@@ -97,6 +97,13 @@ class ToneLibrary:
         ir_path = self.irs_dir / stored_name
         with self._lock:
             manifest = self._load_manifest()
+            updated_tone = None
+            if tone_id:
+                tone_record = self._find_tone(manifest, tone_id)
+                if tone_record is None:
+                    raise ToneLibraryError("tone_not_found", f"Unknown tone id: {tone_id}", status=404)
+                updated_tone = tone_record
+
             self._atomic_write_bytes(ir_path, data)
             ir_record = {
                 "id": ir_id,
@@ -105,14 +112,8 @@ class ToneLibrary:
                 "imported_at": imported_at,
             }
             manifest["irs"].append(ir_record)
-
-            updated_tone = None
-            if tone_id:
-                tone_record = self._find_tone(manifest, tone_id)
-                if tone_record is None:
-                    raise ToneLibraryError("tone_not_found", f"Unknown tone id: {tone_id}", status=404)
-                tone_record["ir_id"] = ir_id
-                updated_tone = tone_record
+            if updated_tone is not None:
+                updated_tone["ir_id"] = ir_id
 
             self._save_manifest(manifest)
             payload: dict[str, Any] = {"ir": self._public_ir(ir_record)}

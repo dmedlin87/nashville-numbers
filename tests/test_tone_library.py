@@ -80,6 +80,17 @@ def test_import_ir_attach_detach_and_orphan_cleanup(tmp_path) -> None:
     assert library.list_library()["irs"] == []
 
 
+def test_import_ir_unknown_tone_leaves_no_file_or_manifest_residue(tmp_path) -> None:
+    library = ToneLibrary(root_dir=tmp_path / "tones")
+
+    with pytest.raises(ToneLibraryError) as exc:
+        library.import_ir(filename="cab.wav", data=b"RIFF....WAVE", tone_id="missing")
+
+    assert exc.value.code == "tone_not_found"
+    assert list(library.irs_dir.glob("*")) == []
+    assert library.list_library()["irs"] == []
+
+
 def test_remove_tone_cleans_orphan_ir_and_keeps_manifest_consistent(tmp_path) -> None:
     library = ToneLibrary(root_dir=tmp_path / "tones")
     tone = library.import_model(filename="tone.nam", data=_valid_model())
