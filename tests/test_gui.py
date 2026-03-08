@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from nashville_numbers.audio import AudioInstallError, AudioUnavailableError
+from nashville_numbers.music_lab import build_progression_plan
 import nashville_numbers.gui as gui
 
 
@@ -899,3 +900,112 @@ def test_post_arrangement_export_midi_requires_session(gui_server: int) -> None:
     data = json.loads(body)
     assert status == 403
     assert data.get("error") == "Forbidden"
+
+
+# ---------------------------------------------------------------------------
+# voicing_style and voice_leading HTTP passthrough
+# ---------------------------------------------------------------------------
+
+
+def test_post_arrangement_plan_passes_voicing_params(
+    gui_server: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_plan(input_text: str, **kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return {
+            "tempo": kwargs["tempo"],
+            "meter": kwargs["meter"],
+            "count_in_beats": kwargs["count_in_beats"],
+            "summary": {"bar_count": 4},
+            "sections": [],
+        }
+
+    monkeypatch.setattr(gui, "build_progression_plan", fake_plan)
+
+    status, _headers, payload = _post_json(
+        gui_server,
+        "/arrangement/plan",
+        {
+            "input": "C - Am - F - G",
+            "voicing_style": "drop2",
+            "voice_leading": True,
+        },
+    )
+
+    assert status == 200
+    assert captured["voicing_style"] == "drop2"
+    assert captured["voice_leading"] is True
+
+
+def test_post_arrangement_plan_voicing_defaults(
+    gui_server: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_plan(input_text: str, **kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return {
+            "tempo": kwargs["tempo"],
+            "meter": kwargs["meter"],
+            "count_in_beats": kwargs["count_in_beats"],
+            "summary": {"bar_count": 4},
+            "sections": [],
+        }
+
+    monkeypatch.setattr(gui, "build_progression_plan", fake_plan)
+
+    status, _headers, payload = _post_json(
+        gui_server,
+        "/arrangement/plan",
+        {"input": "C - Am - F - G"},
+    )
+
+    assert status == 200
+    assert captured["voicing_style"] == "close"
+    assert captured["voice_leading"] is False
+
+
+def test_post_arrangement_plan_invalid_voicing_style(gui_server: int) -> None:
+    status, _headers, payload = _post_json(
+        gui_server,
+        "/arrangement/plan",
+        {"input": "C - F - G", "voicing_style": "bad"},
+    )
+    assert status == 400
+    assert payload["reason"] == "validation"
+    assert "voicing_style" in payload["error"]
+
+
+def test_post_arrangement_plan_invalid_voice_leading(gui_server: int) -> None:
+    status, _headers, payload = _post_json(
+        gui_server,
+        "/arrangement/plan",
+        {"input": "C - F - G", "voice_leading": "yes"},
+    )
+    assert status == 400
+    assert payload["reason"] == "validation"
+    assert "voice_leading" in payload["error"]
+
+
+def test_post_arrangement_export_midi_passes_voicing_params(
+    gui_server: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_plan(input_text: str, **kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return build_progression_plan(input_text, **kwargs)
+
+    monkeypatch.setattr(gui, "build_progression_plan", fake_plan)
+
+    status, headers, _ = _post_raw(
+        gui_server,
+        "/arrangement/export-midi",
+        {"input": "C - F - G", "voicing_style": "drop3", "voice_leading": True},
+    )
+
+    assert status == 200
+    assert captured["voicing_style"] == "drop3"
+    assert captured["voice_leading"] is True

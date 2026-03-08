@@ -63,11 +63,13 @@ gui.py        - owns GuiApp lifecycle, embedded HTML, pywebview/browser startup,
 v
 gui_http.py   - serves GET /, GET /audio/* status, POST /convert,
 |               POST /arrangement/plan, POST /arrangement/export-midi,
-|               and POST /audio/* JSON endpoints
+|               and POST /audio/* JSON endpoints; validates voicing_style
+|               (close/drop2/drop3) and voice_leading (bool) params
 v
 music_lab.py  - converts/infer keys into arrangement sections, bars, slots,
-|               groove presets (9 presets with explicit pattern fields),
-|               voicing_style/voice_leading plan parameters, and transport metadata
+|               groove presets (9 presets with explicit pattern fields and
+|               drum_pattern for GM percussion), voicing_style/voice_leading
+|               plan parameters, and transport metadata
 v
 voicing.py    - chord voicing: note value lookup, chord/NNS root resolution,
 |               pitch-class derivation, MIDI voicing (close/drop-2/drop-3),
@@ -75,15 +77,18 @@ voicing.py    - chord voicing: note value lookup, chord/NNS root resolution,
 |               voice leading optimizer, and bass voicing
 v
 sequence.py   - converts a plan dict into a flat timed event list
-|               (count-in, chord, bass, and arpeggio events) for AudioService
-|               or MIDI export; consumes chord_pattern for multi-hit grooves,
-|               arp_pattern for arpeggiated chords, walking bass for scale walks;
-|               applies swing, humanize, and velocity variance via deterministic
-|               post-processing; supports voicing_style and voice_leading passthrough
+|               (count-in, chord, bass, drum, and arpeggio events) for
+|               AudioService or MIDI export; consumes chord_pattern for
+|               multi-hit grooves, arp_pattern for arpeggiated chords,
+|               drum_pattern for GM percussion (channel 9), walking bass
+|               for scale walks; applies swing, humanize, and velocity
+|               variance via deterministic post-processing; supports
+|               voicing_style and voice_leading passthrough
 v
 midi_export.py - zero-dependency Standard MIDI File writer; converts event list
-|                to Type 1 SMF with stem-separated tracks (chord, bass, count-in),
-|                GM program changes, and time signature meta-events
+|                to Type 1 SMF with stem-separated tracks (chord, bass,
+|                count-in, drums), GM program changes, and time signature
+|                meta-events; drum track uses channel 9 (GM percussion)
 v
 audio/*       - optional HQ audio runtime/install, scheduling, and playback service
 ```
@@ -102,7 +107,7 @@ When no key is given for chords->NNS, the converter returns up to 3 key interpre
 
 ### GUI (`gui.py`)
 
-The entire front-end is a single embedded HTML string (`_HTML`) - no separate asset files. `GuiApp` owns the HTTP server lifecycle, lazy handler construction, runtime-install job state, and native-window/browser fallback behavior. Request handling lives in `gui_http.py`, which serves `GET /`, `GET /audio/status`, `GET /audio/install-runtime/status`, `POST /convert`, `POST /arrangement/plan`, `POST /arrangement/export-midi`, and several `POST /audio/*` playback/install endpoints. `music_lab.py` builds the arrangement timeline payload used by the Music Lab transport UI. The server enforces `MAX_INPUT_LENGTH = 1_000_000` and validates the JSON payload is a dict before accessing fields.
+The entire front-end is a single embedded HTML string (`_HTML`) - no separate asset files. `GuiApp` owns the HTTP server lifecycle, lazy handler construction, runtime-install job state, and native-window/browser fallback behavior. Request handling lives in `gui_http.py`, which serves `GET /`, `GET /audio/status`, `GET /audio/install-runtime/status`, `POST /convert`, `POST /arrangement/plan`, `POST /arrangement/export-midi`, and several `POST /audio/*` playback/install endpoints. `music_lab.py` builds the arrangement timeline payload used by the Music Lab transport UI. The Music Lab panel exposes all 9 groove presets, voicing style (close/drop-2/drop-3), voice leading toggle, tempo, meter, count-in, and bass guide controls. The server enforces `MAX_INPUT_LENGTH = 1_000_000` and validates the JSON payload is a dict before accessing fields.
 
 ## Output Contract
 
@@ -133,14 +138,14 @@ Separators (` - `, ` | `, `,`, whitespace) are preserved verbatim in output. Tok
 | `test_security.py`          | ReDoS safety: both parser regexes must complete in < 100ms on 5000-char payloads |
 | `test_spelling.py`          | Output format consistency                                                        |
 | `test_cli.py`               | CLI behaviour                                                                    |
-| `test_gui.py`               | GUI HTTP endpoints, MIDI export, runtime install job flow, and window/browser fallback |
-| `test_music_lab.py`         | Arrangement planning, bar shaping, groove expansion (9 presets), voicing plan fields, and NNS/chord transport metadata  |
+| `test_gui.py`               | GUI HTTP endpoints, MIDI export, runtime install job flow, window/browser fallback, voicing_style/voice_leading HTTP passthrough |
+| `test_music_lab.py`         | Arrangement planning, bar shaping, groove expansion (9 presets), voicing plan fields, drum pattern validation, and NNS/chord transport metadata  |
 | `test_audio_service.py`     | `AudioService` orchestration, scheduler interaction, and install flows           |
 | `test_audio_engine.py`      | Audio engine wrapper behaviour                                                   |
 | `test_audio_installer.py`   | Runtime/SoundFont installer behaviour                                            |
 | `test_audio_scheduler.py`   | Timed scheduling primitives for playback                                         |
 | `test_voicing.py`           | Chord voicing: note values, pitch classes, MIDI voicing, bass, extended voicings (6/9/11/13/add), voicing styles (drop-2/drop-3), voice leading |
-| `test_sequence.py`          | Plan-to-event-list: count-in, chord, bass patterns, timing, NNS input, chord_pattern consumption, expression, new grooves (waltz/shuffle/funk/reggae/ballad), arpeggio, walking bass, voice leading |
-| `test_midi_export.py`       | MIDI file structure, VLQ encoding, note events, file export, count-in flag, stem track separation, program changes, time signature meta |
+| `test_sequence.py`          | Plan-to-event-list: count-in, chord, bass patterns, timing, NNS input, chord_pattern consumption, expression, new grooves (waltz/shuffle/funk/reggae/ballad), arpeggio, walking bass, voice leading, drum events |
+| `test_midi_export.py`       | MIDI file structure, VLQ encoding, note events, file export, count-in flag, stem track separation, program changes, time signature meta, drum track |
 
 Golden tests in `test_conversion_golden.py` are the primary regression guard - update them when intentionally changing output.

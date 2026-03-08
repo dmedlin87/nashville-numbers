@@ -79,6 +79,17 @@ def build_arrangement_sequence(plan: dict[str, Any]) -> dict[str, Any]:
 
             cursor_beats += bar["beats"]
 
+    # Drum events — one pattern cycle per bar.
+    drum_pattern = groove.get("drum_pattern", [])
+    if drum_pattern:
+        drum_cursor = float(plan["count_in_beats"])
+        for section in plan["sections"]:
+            for bar in section["bars"]:
+                events.extend(
+                    _build_drum_events(drum_pattern, drum_cursor, bar["beats"], beat_ms)
+                )
+                drum_cursor += bar["beats"]
+
     total_ms = round(cursor_beats * beat_ms + 240)
 
     count_in_end_ms = round(float(plan["count_in_beats"]) * beat_ms)
@@ -377,4 +388,33 @@ def _bass_range_note(root_midi: int, pc: int, root_pc: int) -> int:
     while midi < 28:
         midi += 12
     return midi
+
+
+def _build_drum_events(
+    drum_pattern: list[dict[str, Any]],
+    bar_start_beats: float,
+    bar_beats: float,
+    beat_ms: float,
+) -> list[dict[str, Any]]:
+    """Generate percussion events for one bar from a drum pattern.
+
+    Each hit in *drum_pattern* must have ``beat``, ``note``, and ``velocity``
+    fields.  Hits whose beat offset falls outside the bar duration are skipped.
+    All events are emitted on channel 9 (GM percussion).
+    """
+    events: list[dict[str, Any]] = []
+    for hit in drum_pattern:
+        beat_offset = hit["beat"]
+        if beat_offset >= bar_beats:
+            continue
+        delay_ms = round((bar_start_beats + beat_offset) * beat_ms)
+        events.append({
+            "kind": "note",
+            "delay_ms": delay_ms,
+            "duration_ms": 80,
+            "velocity": hit["velocity"],
+            "channel": 9,
+            "midi": hit["note"],
+        })
+    return events
 

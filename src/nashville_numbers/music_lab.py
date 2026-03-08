@@ -30,6 +30,16 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "swing": 0.0,
         "humanize_ms": 8,
         "velocity_variance": 6,
+        "drum_pattern": [
+            {"beat": 0.0, "note": 36, "velocity": 100},
+            {"beat": 0.0, "note": 42, "velocity": 80},
+            {"beat": 1.0, "note": 42, "velocity": 70},
+            {"beat": 1.5, "note": 42, "velocity": 60},
+            {"beat": 2.0, "note": 38, "velocity": 95},
+            {"beat": 2.0, "note": 42, "velocity": 80},
+            {"beat": 3.0, "note": 42, "velocity": 70},
+            {"beat": 3.5, "note": 42, "velocity": 60},
+        ],
     },
     "pulse": {
         "id": "pulse",
@@ -53,6 +63,18 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "swing": 0.0,
         "humanize_ms": 4,
         "velocity_variance": 4,
+        "drum_pattern": [
+            {"beat": 0.0, "note": 36, "velocity": 100},
+            {"beat": 0.0, "note": 42, "velocity": 85},
+            {"beat": 0.5, "note": 42, "velocity": 60},
+            {"beat": 1.0, "note": 42, "velocity": 80},
+            {"beat": 1.5, "note": 42, "velocity": 60},
+            {"beat": 2.0, "note": 36, "velocity": 95},
+            {"beat": 2.0, "note": 42, "velocity": 85},
+            {"beat": 2.5, "note": 42, "velocity": 60},
+            {"beat": 3.0, "note": 42, "velocity": 80},
+            {"beat": 3.5, "note": 42, "velocity": 60},
+        ],
     },
     "lantern": {
         "id": "lantern",
@@ -74,6 +96,14 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "swing": 0.3,
         "humanize_ms": 6,
         "velocity_variance": 8,
+        "drum_pattern": [
+            {"beat": 0.0, "note": 42, "velocity": 75},
+            {"beat": 1.0, "note": 42, "velocity": 65},
+            {"beat": 1.5, "note": 42, "velocity": 55},
+            {"beat": 2.0, "note": 42, "velocity": 75},
+            {"beat": 3.0, "note": 42, "velocity": 65},
+            {"beat": 3.5, "note": 42, "velocity": 55},
+        ],
     },
     "pads": {
         "id": "pads",
@@ -92,6 +122,7 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "swing": 0.0,
         "humanize_ms": 0,
         "velocity_variance": 0,
+        "drum_pattern": [],
     },
     "waltz": {
         "id": "waltz",
@@ -114,6 +145,11 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "swing": 0.0,
         "humanize_ms": 6,
         "velocity_variance": 5,
+        "drum_pattern": [
+            {"beat": 0.0, "note": 36, "velocity": 100},
+            {"beat": 1.0, "note": 42, "velocity": 75},
+            {"beat": 2.0, "note": 42, "velocity": 75},
+        ],
     },
     "shuffle": {
         "id": "shuffle",
@@ -138,6 +174,14 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "swing": 0.5,
         "humanize_ms": 8,
         "velocity_variance": 8,
+        "drum_pattern": [
+            {"beat": 0.0, "note": 36, "velocity": 100},
+            {"beat": 0.0, "note": 51, "velocity": 80},
+            {"beat": 1.0, "note": 51, "velocity": 70},
+            {"beat": 2.0, "note": 38, "velocity": 90},
+            {"beat": 2.0, "note": 51, "velocity": 80},
+            {"beat": 3.0, "note": 51, "velocity": 70},
+        ],
     },
     "funk": {
         "id": "funk",
@@ -163,6 +207,18 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "swing": 0.15,
         "humanize_ms": 6,
         "velocity_variance": 10,
+        "drum_pattern": [
+            {"beat": 0.0, "note": 36, "velocity": 105},
+            {"beat": 0.0, "note": 42, "velocity": 85},
+            {"beat": 0.5, "note": 42, "velocity": 60},
+            {"beat": 1.0, "note": 42, "velocity": 80},
+            {"beat": 1.5, "note": 46, "velocity": 70},
+            {"beat": 2.0, "note": 38, "velocity": 100},
+            {"beat": 2.0, "note": 42, "velocity": 85},
+            {"beat": 2.5, "note": 36, "velocity": 85},
+            {"beat": 3.0, "note": 42, "velocity": 80},
+            {"beat": 3.5, "note": 42, "velocity": 60},
+        ],
     },
     "reggae": {
         "id": "reggae",
@@ -187,6 +243,15 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "swing": 0.0,
         "humanize_ms": 4,
         "velocity_variance": 6,
+        "drum_pattern": [
+            {"beat": 0.0, "note": 36, "velocity": 95},
+            {"beat": 0.0, "note": 42, "velocity": 75},
+            {"beat": 1.0, "note": 42, "velocity": 70},
+            {"beat": 2.0, "note": 38, "velocity": 60},
+            {"beat": 2.0, "note": 42, "velocity": 75},
+            {"beat": 3.0, "note": 36, "velocity": 85},
+            {"beat": 3.0, "note": 42, "velocity": 70},
+        ],
     },
     "ballad": {
         "id": "ballad",
@@ -205,6 +270,7 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "swing": 0.0,
         "humanize_ms": 0,
         "velocity_variance": 0,
+        "drum_pattern": [],
     },
 }
 

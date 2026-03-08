@@ -88,9 +88,9 @@ class TestMidiFileStructure:
     def test_has_expected_track_count(self):
         plan = _make_plan()
         data = export_midi_bytes(plan)
-        # Count MTrk occurrences: tempo + chords + bass + count-in = 4.
+        # Count MTrk occurrences: tempo + chords + bass + count-in + drums = 5.
         count = data.count(b"MTrk")
-        assert count == 4
+        assert count == 5
 
     def test_non_empty_output(self):
         plan = _make_plan()
@@ -198,13 +198,14 @@ class TestStemTracks:
     def test_four_tracks_with_count_in(self):
         plan = _make_plan()
         data = export_midi_bytes(plan, include_count_in=True)
-        assert data.count(b"MTrk") == 4
+        # tempo + chords + bass + count-in + drums = 5.
+        assert data.count(b"MTrk") == 5
 
     def test_three_tracks_without_count_in(self):
         plan = _make_plan()
         data = export_midi_bytes(plan, include_count_in=False)
-        # No count-in events → no count-in track; tempo + chords + bass = 3.
-        assert data.count(b"MTrk") == 3
+        # No count-in events → no count-in track; tempo + chords + bass + drums = 4.
+        assert data.count(b"MTrk") == 4
 
     def test_header_num_tracks_matches_mtrk_count(self):
         plan = _make_plan()
@@ -255,3 +256,54 @@ class TestTimeSigMeta:
         plan = _make_plan()
         data = export_midi_bytes(plan)
         assert b"\xFF\x58\x04" in data
+
+
+# ---------------------------------------------------------------------------
+# Drum track
+# ---------------------------------------------------------------------------
+
+
+class TestDrumTrack:
+    def test_drum_track_present_with_drum_pattern(self):
+        from nashville_numbers.sequence import build_arrangement_sequence
+
+        plan = _make_plan(groove="anthem")
+        seq = build_arrangement_sequence(plan)
+        drum_events = [e for e in seq["events"] if e["channel"] == 9]
+        # anthem has drum_pattern, should produce ch9 events after count-in
+        ci_end_ms = plan["count_in_beats"] * (60_000.0 / plan["tempo"])
+        arrangement_drums = [e for e in drum_events if e["delay_ms"] >= ci_end_ms]
+        assert len(arrangement_drums) > 0
+
+    def test_no_drum_track_when_pattern_empty(self):
+        plan = _make_plan(groove="pads")
+        data = export_midi_bytes(plan, include_count_in=False)
+        # pads has empty drum_pattern, so no drum track: tempo + chords + bass = 3.
+        assert data.count(b"MTrk") == 3
+
+    def test_drum_track_separate_from_count_in(self):
+        from nashville_numbers.sequence import build_arrangement_sequence
+
+        plan = _make_plan(groove="anthem")
+        seq = build_arrangement_sequence(plan)
+        ci_end_ms = plan["count_in_beats"] * (60_000.0 / plan["tempo"])
+        drum_events = [
+            e for e in seq["events"]
+            if e["channel"] == 9 and e["delay_ms"] >= ci_end_ms
+        ]
+        # All drum events should use GM percussion note numbers.
+        for e in drum_events:
+            assert 35 <= e["midi"] <= 81
+
+    def test_drum_events_use_channel_9(self):
+        from nashville_numbers.sequence import build_arrangement_sequence
+
+        plan = _make_plan(groove="funk")
+        seq = build_arrangement_sequence(plan)
+        ci_end_ms = plan["count_in_beats"] * (60_000.0 / plan["tempo"])
+        drum_events = [
+            e for e in seq["events"]
+            if e["channel"] == 9 and e["delay_ms"] >= ci_end_ms
+        ]
+        assert all(e["channel"] == 9 for e in drum_events)
+        assert all(e["kind"] == "note" for e in drum_events)

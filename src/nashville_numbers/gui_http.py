@@ -16,6 +16,8 @@ from .audio import AudioInstallError, AudioUnavailableError
 
 LOG = logging.getLogger(__name__)
 
+_VOICING_STYLES = {"close", "drop2", "drop3"}
+
 
 def build_handler(
     *,
@@ -281,6 +283,10 @@ def build_handler(
                     count_in = self._int_field(payload, "count_in_beats", minimum=0, maximum=16, default=4)
                     groove = str(payload.get("groove", "anthem")).strip().lower() or "anthem"
                     bass_enabled = self._bool_field(payload, "bass_enabled", default=True)
+                    voicing_style = str(payload.get("voicing_style", "close")).strip().lower()
+                    if voicing_style not in _VOICING_STYLES:
+                        raise ValueError(f"'voicing_style' must be one of {sorted(_VOICING_STYLES)}")
+                    voice_leading = self._bool_field(payload, "voice_leading", default=False)
                     plan = plan_arrangement(
                         input_text,
                         tempo=tempo,
@@ -288,6 +294,8 @@ def build_handler(
                         groove=groove,
                         count_in_beats=count_in,
                         bass_enabled=bass_enabled,
+                        voicing_style=voicing_style,
+                        voice_leading=voice_leading,
                     )
                     self._send_json({"plan": plan})
                 except ValueError as exc:
@@ -317,6 +325,10 @@ def build_handler(
                     count_in = self._int_field(payload, "count_in_beats", minimum=0, maximum=16, default=4)
                     groove = str(payload.get("groove", "anthem")).strip().lower() or "anthem"
                     bass_enabled = self._bool_field(payload, "bass_enabled", default=True)
+                    voicing_style = str(payload.get("voicing_style", "close")).strip().lower()
+                    if voicing_style not in _VOICING_STYLES:
+                        raise ValueError(f"'voicing_style' must be one of {sorted(_VOICING_STYLES)}")
+                    voice_leading = self._bool_field(payload, "voice_leading", default=False)
                     plan = plan_arrangement(
                         input_text,
                         tempo=tempo,
@@ -324,6 +336,8 @@ def build_handler(
                         groove=groove,
                         count_in_beats=count_in,
                         bass_enabled=bass_enabled,
+                        voicing_style=voicing_style,
+                        voice_leading=voice_leading,
                     )
                     midi_bytes = export_midi_bytes(plan)
                     self._send_binary(

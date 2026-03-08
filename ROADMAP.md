@@ -4,15 +4,25 @@ This file is the canonical project roadmap.
 
 ## Status
 
-Current active work: Phase 3 is complete. Extended chord voicings (6th, 9th, 11th, 13th, add chords), five new groove presets (waltz, shuffle, funk, reggae, ballad), arpeggio pattern support, walking bass, voicing styles (close/drop-2/drop-3), and voice leading optimization have all landed.
+Current active work: Phase 4 first batch is complete. All 9 groove presets are exposed in the GUI, voicing style and voice leading controls are wired end-to-end (GUI → HTTP → planner → sequence), and drum pattern support generates a percussion track in both the event list and MIDI export.
 
 ## Current Track
 
 ### In Progress
 
-- Identify Phase 4 entry points for tone-aware layers and GUI exposure of new features.
+- Identify Phase 4 second-batch entry points: live-input experiments, NAM/IR exploration, per-channel program changes.
 
 ### Just Landed
+
+- Synced all 9 groove presets to the front-end JS (`gui.py`): waltz, shuffle, funk, reggae, and ballad now appear in the groove picker grid alongside anthem, pulse, lantern, and pads.
+- Added voicing style control (`gui.py`): `<select id="labVoicingStyle">` with Close, Drop-2, and Drop-3 options.
+- Added voice leading toggle (`gui.py`): checkbox that minimizes note movement between consecutive chords.
+- Wired `voicing_style` and `voice_leading` through HTTP endpoints (`gui_http.py`): both `POST /arrangement/plan` and `POST /arrangement/export-midi` now extract, validate, and pass these parameters to the planner.
+- Added `drum_pattern` field to all 9 groove presets (`music_lab.py`): each preset defines per-beat GM percussion hits (kick, snare, hi-hat, ride, etc.). Pads and ballad use empty patterns for clean, percussion-free output.
+- Added drum event generation (`sequence.py`): `_build_drum_events` emits `kind: "note"` events on channel 9 from the groove's drum pattern, one cycle per bar. Expression (humanize, velocity variance, swing) applies to drum events.
+- Added drum track to MIDI export (`midi_export.py`): channel-9 drum events are partitioned into a separate track, distinct from the count-in track. Type 1 SMF now supports up to 5 tracks (tempo, chords, bass, count-in, drums).
+
+### Completed
 
 - Extended chord voicings (`voicing.py`): 6th, 9th, 11th, 13th, add9/add11/add13, maj9/maj11/maj13, min9/min11/min13 now produce correct pitch classes and MIDI notes. Fixed dim7 voicing bug (+9 instead of +10). Fixed mmaj7 minor-quality detection.
 - Five new groove presets (`music_lab.py`): waltz (3/4 feel, 3 chord hits), shuffle (swing 0.5, octave bass), funk (syncopated 5-hit staccato), reggae (all-offbeat skank), ballad (wide sustained strum, GM harp).
@@ -22,12 +32,9 @@ Current active work: Phase 3 is complete. Extended chord voicings (6th, 9th, 11t
 - Voice leading optimizer (`voicing.py`): `get_chord_midi_notes` accepts `prev_midis` for voice-leading. Generates all inversions × octave shifts, picks the voicing with minimum total semitone movement from the previous chord.
 - Wired voice leading into the sequence builder (`sequence.py`): `build_arrangement_sequence` reads `voicing_style` and `voice_leading` from the plan dict, tracks `prev_midis` across slots.
 - Plan parameters (`music_lab.py`): `build_progression_plan` accepts `voicing_style` and `voice_leading` keyword args, included in the returned plan dict.
-
-### Completed
-
 - Wired `chord_pattern` consumption in the sequence builder (`sequence.py`): the groove's `chord_pattern` list now drives multi-hit chord events per slot with beat offsets and velocity scaling.
 - Added `_apply_expression` post-processing pass (`sequence.py`): applies swing (off-beat eighth shift), humanize (deterministic RNG timing jitter), and velocity variance to all non-count-in events. Controllable via `expression_seed` for reproducibility.
-- Refactored MIDI export to stem-separated tracks (`midi_export.py`): Type 1 SMF now outputs 3-4 tracks (tempo, chord stem, bass stem, optional count-in on GM percussion channel 9) with program change events and time signature meta-events.
+- Refactored MIDI export to stem-separated tracks (`midi_export.py`): Type 1 SMF now outputs 3-5 tracks (tempo, chord stem, bass stem, optional count-in, optional drums on GM percussion channel 9) with program change events and time signature meta-events.
 - Added `chord_program` and `bass_program` fields to all groove presets for GM instrument assignment.
 - Activated non-zero expression values across groove presets: anthem (humanize 8ms, variance 6), pulse (humanize 4ms, variance 4, 4-hit chord pattern), lantern (swing 0.3, humanize 6ms, variance 8, 2-hit pattern), pads (unchanged, clean baseline).
 - Ported JS chord voicing to Python (`voicing.py`): note value lookup, chord/NNS root resolution, pitch-class derivation, MIDI voicing (C3 base), slash-chord bass voicing.
@@ -54,24 +61,21 @@ Current active work: Phase 3 is complete. Extended chord voicings (6th, 9th, 11t
 ### Current Safety Baseline
 
 - Worktree-local test command: `PYTHONPATH=src python -m pytest -q`
-- Latest verified result during this track: `371 passed, 1 skipped`
+- Latest verified result during this track: `392 passed, 1 skipped`
 
 ## Next Steps
 
-### Phase 4: Tone Exploration and GUI Feature Exposure
+### Phase 4 Second Batch: Tone and Live-Input Exploration
 
-- Expose groove picker, voicing style, and voice leading toggles in the embedded GUI.
 - Add live-input experiments on top of the transport and fretboard targets.
 - Explore NAM/IR insertion where believable source audio exists.
 - Keep the transport planner independent from the eventual tone engine.
-- Add drum pattern field to groove presets for percussion track generation.
 - Explore per-channel program changes during live playback.
-- Consider adding a `POST /arrangement/plan` endpoint that accepts `voicing_style` and `voice_leading` params.
 
 Why this matters:
 - The hard part of the broader idea is not chart parsing; it is source realism, routing, and UX layering around playback.
-- Phase 3's extended voicings, groove expansion, and voice leading make the arrangement output significantly more musically expressive.
-- Voice-led drop voicings combined with arpeggio patterns now produce output comparable to a competent arranger sketch.
+- Phase 4 first batch's GUI exposure, voicing controls, and drum patterns make the arrangement surface feature-complete for sketching.
+- Voice-led drop voicings combined with arpeggio patterns and drum grooves now produce output comparable to a competent arranger sketch.
 
 ### Explicitly Deferred
 

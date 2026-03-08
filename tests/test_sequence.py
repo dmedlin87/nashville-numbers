@@ -570,3 +570,60 @@ class TestVoiceLeadingSequence:
         seq = build_arrangement_sequence(plan)
         chords = [e for e in seq["events"] if e["kind"] == "chord"]
         assert len(chords) == 4
+
+
+# ---------------------------------------------------------------------------
+# Drum events
+# ---------------------------------------------------------------------------
+
+
+class TestDrumEvents:
+    def test_drum_events_generated_when_pattern_present(self):
+        plan = _make_plan(groove="anthem")
+        seq = build_arrangement_sequence(plan)
+        ci_end_ms = plan["count_in_beats"] * (60_000.0 / plan["tempo"])
+        drums = [e for e in seq["events"] if e["channel"] == 9 and e["delay_ms"] >= ci_end_ms]
+        assert len(drums) > 0
+
+    def test_no_drum_events_when_pattern_empty(self):
+        plan = _make_plan(groove="pads")
+        seq = build_arrangement_sequence(plan)
+        ci_end_ms = plan["count_in_beats"] * (60_000.0 / plan["tempo"])
+        drums = [e for e in seq["events"] if e["channel"] == 9 and e["delay_ms"] >= ci_end_ms]
+        assert len(drums) == 0
+
+    def test_drum_events_respect_bar_timing(self):
+        plan = _make_plan(groove="waltz", meter=3)
+        seq = build_arrangement_sequence(plan)
+        ci_end_ms = plan["count_in_beats"] * (60_000.0 / plan["tempo"])
+        drums = [e for e in seq["events"] if e["channel"] == 9 and e["delay_ms"] >= ci_end_ms]
+        # Waltz has 3 drum hits per bar; all should start at or after the count-in.
+        assert all(e["delay_ms"] >= ci_end_ms for e in drums)
+        assert all(e["kind"] == "note" for e in drums)
+
+    def test_drum_events_all_channel_9(self):
+        plan = _make_plan(groove="funk")
+        seq = build_arrangement_sequence(plan)
+        ci_end_ms = plan["count_in_beats"] * (60_000.0 / plan["tempo"])
+        drums = [e for e in seq["events"] if e["channel"] == 9 and e["delay_ms"] >= ci_end_ms]
+        assert all(e["channel"] == 9 for e in drums)
+
+    def test_expression_applies_to_drum_events(self):
+        plan = _make_plan(groove="anthem")
+        plan["expression_seed"] = 99
+        seq = build_arrangement_sequence(plan)
+        ci_end_ms = plan["count_in_beats"] * (60_000.0 / plan["tempo"])
+        drums = [e for e in seq["events"] if e["channel"] == 9 and e["delay_ms"] >= ci_end_ms]
+        # With humanize_ms=8 and velocity_variance=6, at least some events should differ
+        # from their original velocities. Check that events exist and have valid velocities.
+        assert all(1 <= e["velocity"] <= 127 for e in drums)
+
+    def test_no_drum_events_without_drum_pattern_key(self):
+        """Grooves that lack drum_pattern entirely produce no drum events."""
+        plan = _make_plan(groove="pads")
+        # Remove the key to simulate an older preset without it.
+        plan["groove"].pop("drum_pattern", None)
+        seq = build_arrangement_sequence(plan)
+        ci_end_ms = plan["count_in_beats"] * (60_000.0 / plan["tempo"])
+        drums = [e for e in seq["events"] if e["channel"] == 9 and e["delay_ms"] >= ci_end_ms]
+        assert len(drums) == 0

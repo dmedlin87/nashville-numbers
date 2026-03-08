@@ -2181,11 +2181,27 @@ _HTML = r"""<!DOCTYPE html>
                 <option value="0">None</option>
               </select>
             </label>
+            <label class="lab-field">
+              <span class="lab-field-label">Voicing</span>
+              <select id="labVoicingStyle" class="lab-select">
+                <option value="close">Close</option>
+                <option value="drop2">Drop-2</option>
+                <option value="drop3">Drop-3</option>
+              </select>
+            </label>
             <div class="lab-field">
               <span class="lab-field-label">Runtime</span>
               <div class="lab-analysis" style="margin:0">The active audio path follows the existing HQ or browser fallback stack.</div>
             </div>
           </div>
+
+          <label class="lab-toggle" for="labVoiceLeading">
+            <span>
+              <span class="lab-toggle-main">Voice leading</span>
+              <span class="lab-toggle-sub">Minimize note movement between consecutive chords.</span>
+            </span>
+            <input id="labVoiceLeading" type="checkbox" />
+          </label>
 
           <label class="lab-toggle" for="labBassEnabled">
             <span>
@@ -2387,6 +2403,51 @@ const MUSIC_LAB_GROOVES = {
     strumMs: 0,
     gate: 1.0,
     bassPattern: 'bar-root'
+  },
+  waltz: {
+    id: 'waltz',
+    name: 'Waltz',
+    description: 'Classic 3/4 feel with strong downbeat and lighter beats 2-3.',
+    chordStyle: 'strum',
+    strumMs: 20,
+    gate: 0.75,
+    bassPattern: 'slot-roots'
+  },
+  shuffle: {
+    id: 'shuffle',
+    name: 'Shuffle',
+    description: 'Swung eighth-note groove with a loose feel.',
+    chordStyle: 'strum',
+    strumMs: 18,
+    gate: 0.7,
+    bassPattern: 'slot-roots'
+  },
+  funk: {
+    id: 'funk',
+    name: 'Funk Grid',
+    description: 'Syncopated staccato hits with offbeat emphasis.',
+    chordStyle: 'block',
+    strumMs: 0,
+    gate: 0.4,
+    bassPattern: 'slot-roots'
+  },
+  reggae: {
+    id: 'reggae',
+    name: 'Reggae Skank',
+    description: 'Offbeat chord stabs with a steady bass anchor.',
+    chordStyle: 'block',
+    strumMs: 0,
+    gate: 0.35,
+    bassPattern: 'slot-roots'
+  },
+  ballad: {
+    id: 'ballad',
+    name: 'Ballad',
+    description: 'Wide sustained strums for slow, expressive arrangements.',
+    chordStyle: 'strum',
+    strumMs: 30,
+    gate: 0.95,
+    bassPattern: 'slot-roots'
   }
 };
 
@@ -3100,7 +3161,9 @@ async function buildArrangement(options = {}) {
     meter: parseInt(document.getElementById('labMeter').value || '4', 10),
     groove: musicLabState.selectedGroove,
     count_in_beats: parseInt(document.getElementById('labCountIn').value || '4', 10),
-    bass_enabled: !!document.getElementById('labBassEnabled').checked
+    bass_enabled: !!document.getElementById('labBassEnabled').checked,
+    voicing_style: document.getElementById('labVoicingStyle').value || 'close',
+    voice_leading: !!document.getElementById('labVoiceLeading').checked
   };
 
   try {

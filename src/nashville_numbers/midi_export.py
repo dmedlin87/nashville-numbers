@@ -169,12 +169,18 @@ def export_midi_bytes(
     chord_events: list[dict[str, Any]] = []
     bass_events: list[dict[str, Any]] = []
     countin_events: list[dict[str, Any]] = []
+    drum_events: list[dict[str, Any]] = []
 
     for event in sequence["events"]:
         if not include_count_in and event["delay_ms"] < ci_end_ms:
             continue
 
-        if event["kind"] == "note" and event["channel"] == 0:
+        if event["channel"] == 9:
+            if event["delay_ms"] < ci_end_ms:
+                countin_events.append(event)
+            else:
+                drum_events.append(event)
+        elif event["kind"] == "note" and event["channel"] == 0:
             if event["delay_ms"] < ci_end_ms:
                 countin_events.append(event)
             else:
@@ -197,6 +203,10 @@ def export_midi_bytes(
     # --- Track 3: Count-in (GM percussion, channel 9) ---
     if countin_events:
         tracks.append(_build_stem_track(countin_events, bpm, channel=9, program=None))
+
+    # --- Track 4: Drums (GM percussion, channel 9) ---
+    if drum_events:
+        tracks.append(_build_stem_track(drum_events, bpm, channel=9, program=None))
 
     # --- Header ---
     num_tracks = len(tracks)

@@ -180,3 +180,44 @@ class TestVoicingPlanFields:
         plan = build_progression_plan("C - F - G")
         assert plan["voicing_style"] == "close"
         assert plan["voice_leading"] is False
+
+
+# ---------------------------------------------------------------------------
+# Drum pattern presets
+# ---------------------------------------------------------------------------
+
+
+class TestDrumPatternPresets:
+    def test_all_presets_have_drum_pattern(self):
+        for name, preset in GROOVE_PRESETS.items():
+            assert "drum_pattern" in preset, f"Groove '{name}' is missing drum_pattern"
+
+    def test_drum_pattern_entries_have_required_fields(self):
+        for name, preset in GROOVE_PRESETS.items():
+            for i, hit in enumerate(preset["drum_pattern"]):
+                assert "beat" in hit, f"Groove '{name}' drum hit {i} missing 'beat'"
+                assert "note" in hit, f"Groove '{name}' drum hit {i} missing 'note'"
+                assert "velocity" in hit, f"Groove '{name}' drum hit {i} missing 'velocity'"
+
+    def test_drum_pattern_notes_are_gm_percussion(self):
+        for name, preset in GROOVE_PRESETS.items():
+            for hit in preset["drum_pattern"]:
+                assert 35 <= hit["note"] <= 81, (
+                    f"Groove '{name}' has drum note {hit['note']} outside GM range 35-81"
+                )
+
+    def test_drum_pattern_velocities_are_valid_midi(self):
+        for name, preset in GROOVE_PRESETS.items():
+            for hit in preset["drum_pattern"]:
+                assert 1 <= hit["velocity"] <= 127, (
+                    f"Groove '{name}' has drum velocity {hit['velocity']} outside 1-127"
+                )
+
+    def test_pads_and_ballad_have_empty_drum_pattern(self):
+        assert GROOVE_PRESETS["pads"]["drum_pattern"] == []
+        assert GROOVE_PRESETS["ballad"]["drum_pattern"] == []
+
+    def test_anthem_drum_pattern_has_kick_and_snare(self):
+        notes = {hit["note"] for hit in GROOVE_PRESETS["anthem"]["drum_pattern"]}
+        assert 36 in notes, "Anthem drum pattern should include kick (36)"
+        assert 38 in notes, "Anthem drum pattern should include snare (38)"
