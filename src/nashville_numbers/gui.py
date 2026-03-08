@@ -6,7 +6,6 @@ No external dependencies required – uses only the standard library.
 
 from __future__ import annotations
 
-from html import escape as html_escape
 import secrets
 import socket
 import threading
@@ -4067,7 +4066,7 @@ function renderOutput(data) {
     const keyMode = (keyMatch && keyMatch[2].toLowerCase().startsWith('min')) ? "Minor" : "Major";
 
     html += `<div class="output-block">`;
-    html += `<span class="output-key interactive-token" onclick="handleTokenInteraction(this, {type:'key', keyTonic:'${keyTonic}', keyMode:'${keyMode}'})">${escapeHtml(keyLine)}</span>\n`;
+    html += `<span class="output-key interactive-token" role="button" tabindex="0" aria-label="Key: ${keyTonic} ${keyMode}" onclick="handleTokenInteraction(this, {type:'key', keyTonic:'${keyTonic}', keyMode:'${keyMode}'})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();handleTokenInteraction(this, {type:'key', keyTonic:'${keyTonic}', keyMode:'${keyMode}'});}">${escapeHtml(keyLine)}</span>\n`;
 
     progressionLines.forEach(line => {
       const tokens = line.split(/(\s+|[-|,|\|]|\/)/);
@@ -4092,7 +4091,7 @@ function renderOutput(data) {
             keyMode
           }).replace(/"/g, '&quot;');
 
-          html += `<span class="output-progression interactive-token" onclick="handleTokenInteraction(this, ${dataJson})">${escapeHtml(token)}</span>`;
+          html += `<span class="output-progression interactive-token" role="button" tabindex="0" aria-label="Select token ${escapeHtml(token)}" onclick="handleTokenInteraction(this, ${dataJson})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();handleTokenInteraction(this, ${dataJson});}">${escapeHtml(token)}</span>`;
         } else {
           html += escapeHtml(token);
         }

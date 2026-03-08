@@ -66,6 +66,9 @@ class TestRuntimeInstallerStatus:
             result = installer.status()
         assert result["python_binding"] is True
 
+    @patch("nashville_numbers.audio.runtime_support.os.name", "nt")
+    @pytest.mark.skipif(os.name != "nt", reason="Windows specific DLL lookup")
+    @pytest.mark.skipif(os.name != "nt", reason="Windows specific DLL lookup")
     def test_status_detects_portable_runtime_library(self, tmp_path) -> None:
         installer = RuntimeInstaller(root_dir=tmp_path)
         runtime_dir = tmp_path / "runtime" / "fluidsynth" / "portable" / "bin"
