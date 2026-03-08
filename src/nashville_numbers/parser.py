@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 from dataclasses import dataclass
 
@@ -54,7 +55,9 @@ class ParsedInput:
     key_mode: str | None
 
 
-def tokenize_progression(text: str) -> list[ProgressionToken]:
+# ⚡ Bolt: Cache tokenization to improve performance for redundant calls (e.g. key_inference scoring)
+@functools.lru_cache(maxsize=1024)
+def _tokenize_progression_cached(text: str) -> tuple[ProgressionToken, ...]:
     # ⚡ Bolt: Fast tokenization using regex split instead of manual looping
     tokens: list[ProgressionToken] = []
 
@@ -71,7 +74,10 @@ def tokenize_progression(text: str) -> list[ProgressionToken]:
             kind = "other"
         tokens.append(ProgressionToken(chunk, kind))
 
-    return tokens
+    return tuple(tokens)
+
+def tokenize_progression(text: str) -> list[ProgressionToken]:
+    return list(_tokenize_progression_cached(text))
 
 
 def _normalize_mode(match: re.Match[str]) -> str | None:
