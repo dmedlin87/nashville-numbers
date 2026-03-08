@@ -1223,26 +1223,6 @@ _HTML = r"""<!DOCTYPE html>
     align-items: center;
   }
 
-  .sep-btn {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-    font-size: 0.88rem;
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    transition: all var(--transition);
-  }
-
-  .sep-btn:hover {
-    border-color: var(--accent);
-    color: var(--text);
-    background: rgba(212,145,92,0.08);
-  }
-
-  .track-spacer { flex: 1; }
-
   .btn-undo {
     background: transparent;
     border: 1px solid var(--border);
@@ -1340,13 +1320,32 @@ _HTML = r"""<!DOCTYPE html>
     border-radius: var(--radius-sm);
     color: var(--text);
     font-family: var(--font-mono);
-    font-size: 1.15rem;
-    font-weight: 800;
-    padding: 0.5rem 0.75rem;
     cursor: pointer;
     transition: all var(--transition);
     text-align: center;
     min-width: 46px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.05rem;
+    padding: 0.4rem 0.75rem 0.35rem;
+  }
+
+  .num-btn-digit {
+    font-size: 1.15rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .num-btn-hint {
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    line-height: 1;
+    min-height: 0.75em;
   }
 
   .num-btn.active {
@@ -1356,9 +1355,34 @@ _HTML = r"""<!DOCTYPE html>
     box-shadow: 0 3px 10px rgba(212,145,92,0.45);
   }
 
+  .num-btn.active .num-btn-hint { color: rgba(255,255,255,0.75); }
+
   .num-btn:hover:not(.active) {
     border-color: var(--accent);
     background: rgba(212,145,92,0.15);
+  }
+
+  .scale-lock-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.22rem 0.6rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+    font-family: inherit;
+    margin-left: 0.1rem;
+  }
+
+  .scale-lock-btn.active {
+    background: rgba(212,145,92,0.18);
+    border-color: var(--accent);
+    color: var(--text);
   }
 
   .acc-btn {
@@ -2052,10 +2076,10 @@ _HTML = r"""<!DOCTYPE html>
       <!-- Mode row -->
       <div class="mode-row">
         <div class="mode-toggle" role="group" aria-label="Conversion direction">
-          <button class="mode-btn active" id="modeChordsBtn" onclick="setBuilderMode('chords')" aria-pressed="true">Chords &rarr; NNS</button>
-          <button class="mode-btn" id="modeNnsBtn" onclick="setBuilderMode('nns')" aria-pressed="false">NNS &rarr; Chords</button>
+          <button class="mode-btn active" id="modeNnsBtn" onclick="setBuilderMode('nns')" aria-pressed="true">NNS &rarr; Chords</button>
+          <button class="mode-btn" id="modeChordsBtn" onclick="setBuilderMode('chords')" aria-pressed="false">Chords &rarr; NNS</button>
         </div>
-        <div class="key-row disabled" id="keyRow" aria-label="Key selection">
+        <div class="key-row" id="keyRow" aria-label="Key selection">
           <span class="key-label">Key</span>
           <select id="keyNote" class="key-select" aria-label="Key note">
             <option>C</option><option>C#</option><option>Db</option><option>D</option>
@@ -2063,9 +2087,15 @@ _HTML = r"""<!DOCTYPE html>
             <option>Gb</option><option>G</option><option>Ab</option><option>A</option>
             <option>Bb</option><option>B</option>
           </select>
-          <select id="keyQuality" class="key-select" aria-label="Key quality">
+          <select id="keyQuality" class="key-select" aria-label="Key scale type" onchange="onKeyQualityChange()">
             <option>Major</option><option>Minor</option>
+            <option>Dorian</option><option>Mixolydian</option>
+            <option>Phrygian</option><option>Lydian</option>
+            <option>Harmonic Minor</option>
           </select>
+          <button type="button" id="scaleLockBtn" class="scale-lock-btn active"
+            onclick="toggleScaleLock()" aria-pressed="true"
+            title="Diatonic Lock — auto-assign chord quality from scale">&#9654; Diatonic</button>
         </div>
       </div>
 
@@ -2077,16 +2107,13 @@ _HTML = r"""<!DOCTYPE html>
 
       <!-- Track actions -->
       <div class="track-actions">
-        <button class="sep-btn" onclick="addBuilderSep(' - ')" title="Add dash separator" aria-label="Add dash separator">&ndash;</button>
-        <button class="sep-btn" onclick="addBuilderSep(' | ')" title="Add bar line" aria-label="Add bar line"> | </button>
-        <button class="sep-btn" onclick="addBuilderSep(', ')" title="Add comma" aria-label="Add comma">,</button>
         <div class="track-spacer"></div>
         <button class="btn-undo" onclick="builderUndo()" aria-label="Remove last item">&#8617; Undo</button>
         <button class="btn-undo" onclick="builderClear()" aria-label="Clear progression">&times; Clear</button>
       </div>
 
       <!-- Chord builder (chords → NNS mode) -->
-      <div id="chordBuilder">
+      <div id="chordBuilder" style="display:none">
         <div class="palette-label">Root Note</div>
         <div class="note-palette" id="notePalette" role="group" aria-label="Root note selection"></div>
         <div class="palette-label">Quality</div>
@@ -2094,7 +2121,7 @@ _HTML = r"""<!DOCTYPE html>
       </div>
 
       <!-- NNS builder (NNS → chords mode) -->
-      <div id="nnsBuilder" style="display:none">
+      <div id="nnsBuilder">
         <div class="palette-label">Scale Degree</div>
         <div class="number-palette" id="numberPalette" role="group" aria-label="Scale degree selection"></div>
         <div class="palette-label">Quality</div>
@@ -3675,11 +3702,12 @@ function doClear() {
 
 // ── Builder Logic ───────────────────────────────────────────────────────────
 
-let builderMode = 'chords';  // 'chords' | 'nns'
+let builderMode = 'nns';  // 'chords' | 'nns'
 let builderTokens = [];      // { type: 'chord'|'sep', text: string }
 let stagedNote = '';         // e.g. "C" or "b3"
 let stagedQuality = '';      // e.g. "m7" or ""
 let nnsAccidental = '';      // '' | 'b' | '#'
+let scaleLockEnabled = true; // auto-assign diatonic quality on degree click
 
 const BUILDER_NOTES = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
 
@@ -3709,6 +3737,29 @@ const NNS_QUALITIES = [
   { label: 'aug',  suffix: 'aug' },
   { label: 'sus4', suffix: 'sus4' },
 ];
+
+// Diatonic chord qualities per scale degree (index 0 = degree 1 … index 6 = degree 7).
+// Suffixes match NNS_QUALITIES.suffix values.
+const DIATONIC_QUALITIES = {
+  'Major':          ['', 'm', 'm', '', '', 'm', 'dim'],
+  'Minor':          ['m', 'dim', '', 'm', 'm', '', ''],
+  'Dorian':         ['m', 'm', '', '', 'm', 'dim', ''],
+  'Mixolydian':     ['', 'm', 'dim', '', 'm', 'm', ''],
+  'Phrygian':       ['m', '', '', 'm', 'dim', '', 'm'],
+  'Lydian':         ['', '', 'm', 'dim', '', 'm', 'm'],
+  'Harmonic Minor': ['m', 'dim', 'aug', 'm', '', '', 'dim'],
+};
+
+const DIATONIC_HINT_LABELS = {
+  '': 'maj', 'm': 'min', 'dim': 'dim', 'aug': 'aug',
+  '(7)': 'dom7', 'm7': 'min7', 'maj7': 'maj7',
+};
+
+// Map extended scale names to the major/minor keyword the backend understands.
+const SCALE_TO_QUALITY_OUTPUT = {
+  'Major': 'major', 'Lydian': 'major', 'Mixolydian': 'major',
+  'Minor': 'minor', 'Dorian': 'minor', 'Phrygian': 'minor', 'Harmonic Minor': 'minor',
+};
 
 function initBuilder() {
   // Note palette
@@ -3776,9 +3827,31 @@ function initBuilder() {
     btn.type = 'button';
     btn.className = 'num-btn';
     btn.dataset.num = n;
-    btn.textContent = n;
+
+    const digitSpan = document.createElement('span');
+    digitSpan.className = 'num-btn-digit';
+    digitSpan.textContent = n;
+
+    const hintSpan = document.createElement('span');
+    hintSpan.className = 'num-btn-hint';
+    hintSpan.dataset.forDegree = n;
+
+    btn.appendChild(digitSpan);
+    btn.appendChild(hintSpan);
+
     btn.addEventListener('click', () => {
       stagedNote = nnsAccidental + n;
+      if (scaleLockEnabled) {
+        const scaleName = document.getElementById('keyQuality').value;
+        const qualities = DIATONIC_QUALITIES[scaleName] || DIATONIC_QUALITIES['Major'];
+        const q = qualities[n - 1];
+        stagedQuality = q;
+        document.querySelectorAll('#nnsQualityPalette .quality-btn').forEach(b => {
+          const isMatch = b.dataset.suffix === q;
+          b.classList.toggle('active', isMatch);
+          b.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+        });
+      }
       commitStaged();
     });
     numberPalette.appendChild(btn);
@@ -3794,6 +3867,8 @@ function initBuilder() {
     stagedQuality = suffix;
     updateStageDisplay();
   });
+
+  updateDiatonicHints();
 }
 
 function buildQualityPalette(id, qualities, handler) {
@@ -3807,6 +3882,32 @@ function buildQualityPalette(id, qualities, handler) {
     btn.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
     btn.addEventListener('click', () => handler(q.suffix, btn));
     palette.appendChild(btn);
+  });
+}
+
+function toggleScaleLock() {
+  scaleLockEnabled = !scaleLockEnabled;
+  const btn = document.getElementById('scaleLockBtn');
+  btn.classList.toggle('active', scaleLockEnabled);
+  btn.setAttribute('aria-pressed', scaleLockEnabled ? 'true' : 'false');
+  updateDiatonicHints();
+}
+
+function onKeyQualityChange() {
+  updateDiatonicHints();
+}
+
+function updateDiatonicHints() {
+  const scaleName = document.getElementById('keyQuality').value;
+  const qualities = DIATONIC_QUALITIES[scaleName] || DIATONIC_QUALITIES['Major'];
+  document.querySelectorAll('.num-btn-hint').forEach(span => {
+    const deg = parseInt(span.dataset.forDegree);
+    if (scaleLockEnabled && deg >= 1 && deg <= 7) {
+      const q = qualities[deg - 1];
+      span.textContent = DIATONIC_HINT_LABELS[q] !== undefined ? DIATONIC_HINT_LABELS[q] : 'maj';
+    } else {
+      span.textContent = '';
+    }
   });
 }
 
@@ -3863,14 +3964,6 @@ function commitStaged() {
   builderTokens.push({ type: 'chord', text: chord });
   renderProgressionTrack();
   resetStage();
-}
-
-function addBuilderSep(sep) {
-  if (builderTokens.length === 0) return;
-  const last = builderTokens[builderTokens.length - 1];
-  if (last.type === 'sep') return;
-  builderTokens.push({ type: 'sep', text: sep });
-  renderProgressionTrack();
 }
 
 function builderUndo() {
@@ -3996,7 +4089,8 @@ function buildProgressionString() {
   if (builderMode === 'nns') {
     const keyNote = document.getElementById('keyNote').value;
     const keyQuality = document.getElementById('keyQuality').value;
-    str += ' in ' + keyNote + ' ' + keyQuality.toLowerCase();
+    const qualityOut = SCALE_TO_QUALITY_OUTPUT[keyQuality] || keyQuality.toLowerCase();
+    str += ' in ' + keyNote + ' ' + qualityOut;
   }
 
   return str.trim();
@@ -4006,8 +4100,13 @@ function buildProgressionString() {
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const SCALE_DEGREES = {
-  "Major": [0, 2, 4, 5, 7, 9, 11],
-  "Minor": [0, 2, 3, 5, 7, 8, 10]
+  "Major":          [0, 2, 4, 5, 7, 9, 11],  // Ionian
+  "Minor":          [0, 2, 3, 5, 7, 8, 10],  // Aeolian
+  "Dorian":         [0, 2, 3, 5, 7, 9, 10],
+  "Mixolydian":     [0, 2, 4, 5, 7, 9, 10],
+  "Phrygian":       [0, 1, 3, 5, 7, 8, 10],
+  "Lydian":         [0, 2, 4, 6, 7, 9, 11],
+  "Harmonic Minor": [0, 2, 3, 5, 7, 8, 11],
 };
 
 const TUNINGS = {
