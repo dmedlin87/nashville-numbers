@@ -72,7 +72,14 @@ class TestRuntimeInstallerStatus:
         runtime_dir.mkdir(parents=True)
         (runtime_dir / "libfluidsynth-3.dll").write_bytes(b"dll")
 
-        with patch.object(installer, "_check_python_binding", return_value=False):
+        with (
+            patch("nashville_numbers.audio.runtime_support.os.name", "nt"),
+            patch("nashville_numbers.audio.runtime_support._candidate_windows_dirs", return_value=[runtime_dir]),
+            patch("nashville_numbers.audio.runtime_support.shutil.which", return_value=None),
+            patch("nashville_numbers.audio.runtime_support._prepend_path"),
+            patch("nashville_numbers.audio.runtime_support._register_dll_directory"),
+            patch.object(installer, "_check_python_binding", return_value=False),
+        ):
             result = installer.status()
 
         assert result["runtime_binary"] is True
