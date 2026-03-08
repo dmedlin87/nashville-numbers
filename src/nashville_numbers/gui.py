@@ -1242,6 +1242,8 @@ _HTML = r"""<!DOCTYPE html>
     align-items: center;
   }
 
+  .track-spacer { flex: 1; }
+
   .btn-undo {
     background: transparent;
     border: 1px solid var(--border);

@@ -182,6 +182,7 @@ def _post_multipart(
     filename: str,
     file_bytes: bytes,
     fields: dict[str, str] | None = None,
+    content_type_extra: str = "",
     authenticated: bool = True,
 ) -> tuple[int, dict[str, str], dict[str, Any]]:
     boundary = f"----nns-{uuid.uuid4().hex}"
@@ -205,7 +206,8 @@ def _post_multipart(
     )
     parts.append(f"--{boundary}--\r\n".encode("utf-8"))
     body = b"".join(parts)
-    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    extra = f"; {content_type_extra}" if content_type_extra else ""
+    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}{extra}"}
     if authenticated:
         _AUTH_PORT["port"] = port
         headers = _auth_headers(headers)
@@ -450,6 +452,35 @@ def test_post_tone_import_requires_session(gui_server: int, tone_library_tmp: To
     )
     assert status == 403
     assert payload == {"error": "Forbidden", "reason": "session_invalid"}
+
+
+def test_post_tone_import_model_accepts_content_type_with_extra_params(
+    gui_server: int, tone_library_tmp: ToneLibrary
+) -> None:
+    status, _headers, payload = _post_multipart(
+        gui_server,
+        "/tone/import-model",
+        filename="ok.nam",
+        file_bytes=b'{"version":"0.9","architecture":"wavenet","weights":[]}',
+        content_type_extra="charset=utf-8",
+    )
+    assert status == 200
+    assert payload["ok"] is True
+
+
+def test_post_tone_import_ir_preserves_uploaded_file_bytes(
+    gui_server: int, tone_library_tmp: ToneLibrary
+) -> None:
+    data = b"\nRIFF....WAVEfmt \x00 trailing-space "
+    status, _headers, payload = _post_multipart(
+        gui_server,
+        "/tone/import-ir",
+        filename="cab.wav",
+        file_bytes=data,
+    )
+    assert status == 200
+    ir_file = payload["ir"]["file"]
+    assert (tone_library_tmp.irs_dir / ir_file).read_bytes() == data
 
 
 def test_post_audio_install_default_success_returns_status(

@@ -263,12 +263,12 @@ def build_handler(
             if not content_type.lower().startswith("multipart/form-data"):
                 self._send_json({"error": "Expected multipart/form-data", "reason": "validation"}, status=400)
                 return None
-            boundary_token = "boundary="
-            boundary_idx = content_type.lower().find(boundary_token)
-            if boundary_idx < 0:
-                self._send_json({"error": "Missing multipart boundary", "reason": "validation"}, status=400)
-                return None
-            boundary = content_type[boundary_idx + len(boundary_token) :].strip().strip('"')
+            boundary = ""
+            for segment in content_type.split(";")[1:]:
+                key, sep_eq, value = segment.strip().partition("=")
+                if sep_eq and key.strip().lower() == "boundary":
+                    boundary = value.strip().strip('"')
+                    break
             if not boundary:
                 self._send_json({"error": "Missing multipart boundary", "reason": "validation"}, status=400)
                 return None
@@ -281,15 +281,20 @@ def build_handler(
             file_bytes: bytes | None = None
 
             for part in parts:
-                chunk = part.strip()
-                if not chunk or chunk == b"--":
+                chunk = part
+                if chunk.startswith(b"\r\n"):
+                    chunk = chunk[2:]
+                if not chunk or chunk in {b"--", b"--\r\n"}:
                     continue
-                if chunk.endswith(b"--"):
-                    chunk = chunk[:-2].rstrip()
+                if chunk.endswith(b"--\r\n"):
+                    chunk = chunk[:-4]
+                elif chunk.endswith(b"--"):
+                    chunk = chunk[:-2]
+                elif chunk.endswith(b"\r\n"):
+                    chunk = chunk[:-2]
                 header_blob, sep, payload = chunk.partition(b"\r\n\r\n")
                 if not sep:
                     continue
-                payload = payload.rstrip(b"\r\n")
 
                 headers: dict[str, str] = {}
                 for line in header_blob.split(b"\r\n"):
