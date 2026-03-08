@@ -13,6 +13,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .audio import AudioInstallError, AudioUnavailableError
+from .tone_library import ToneLibraryError
 
 LOG = logging.getLogger(__name__)
 
@@ -31,17 +32,28 @@ def build_handler(
     convert_text: Callable[[str], str],
     plan_arrangement: Callable[..., dict[str, Any]],
     get_max_input_length: Callable[[], int],
+    get_max_upload_length: Callable[[], int],
+    get_tone_library: Callable[[], Any],
     default_install_job: dict[str, Any],
     runtime_install_job: dict[str, Any],
     install_job_lock: threading.Lock,
     run_default_pack_install: Callable[[], None],
     run_runtime_install: Callable[[], None],
 ) -> type[BaseHTTPRequestHandler]:
-    protected_get_paths = {"/audio/status", "/audio/install-default/status", "/audio/install-runtime/status"}
+    protected_get_paths = {
+        "/audio/status",
+        "/audio/install-default/status",
+        "/audio/install-runtime/status",
+        "/tone/library",
+    }
     protected_post_paths = {
         "/convert",
         "/arrangement/plan",
         "/arrangement/export-midi",
+        "/tone/import-model",
+        "/tone/import-ir",
+        "/tone/attach-ir",
+        "/tone/remove",
         "/audio/install-default",
         "/audio/play-note",
         "/audio/note-on",
@@ -72,6 +84,8 @@ def build_handler(
             elif parsed.path == "/audio/install-runtime/status":
                 with install_job_lock:
                     self._send_json(dict(runtime_install_job))
+            elif parsed.path == "/tone/library":
+                self._handle_tone_library_get()
             else:
                 self._send_json({"error": "not found"}, status=404)
 
@@ -87,6 +101,18 @@ def build_handler(
                 return
             if parsed.path == "/arrangement/export-midi":
                 self._handle_arrangement_export_midi()
+                return
+            if parsed.path == "/tone/import-model":
+                self._handle_tone_import_model()
+                return
+            if parsed.path == "/tone/import-ir":
+                self._handle_tone_import_ir()
+                return
+            if parsed.path == "/tone/attach-ir":
+                self._handle_tone_attach_ir()
+                return
+            if parsed.path == "/tone/remove":
+                self._handle_tone_remove()
                 return
             if parsed.path == "/audio/install-default":
                 self._handle_audio_install_default()
@@ -219,6 +245,94 @@ def build_handler(
                 self._send_json({"error": "Expected JSON object"}, status=400)
                 return None
             return payload
+
+        def _read_multipart_payload(self) -> tuple[dict[str, str], str, bytes] | None:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                self._send_json({"error": "Invalid Content-Length header"}, status=400)
+                return None
+            if length <= 0:
+                self._send_json({"error": "Empty multipart body", "reason": "validation"}, status=400)
+                return None
+            if length > get_max_upload_length():
+                self._send_json({"error": "Payload too large"}, status=413)
+                return None
+
+            content_type = self.headers.get("Content-Type", "")
+            if not content_type.lower().startswith("multipart/form-data"):
+                self._send_json({"error": "Expected multipart/form-data", "reason": "validation"}, status=400)
+                return None
+            boundary_token = "boundary="
+            boundary_idx = content_type.lower().find(boundary_token)
+            if boundary_idx < 0:
+                self._send_json({"error": "Missing multipart boundary", "reason": "validation"}, status=400)
+                return None
+            boundary = content_type[boundary_idx + len(boundary_token) :].strip().strip('"')
+            if not boundary:
+                self._send_json({"error": "Missing multipart boundary", "reason": "validation"}, status=400)
+                return None
+
+            body = self.rfile.read(length)
+            delimiter = b"--" + boundary.encode("utf-8")
+            parts = body.split(delimiter)
+            fields: dict[str, str] = {}
+            filename = ""
+            file_bytes: bytes | None = None
+
+            for part in parts:
+                chunk = part.strip()
+                if not chunk or chunk == b"--":
+                    continue
+                if chunk.endswith(b"--"):
+                    chunk = chunk[:-2].rstrip()
+                header_blob, sep, payload = chunk.partition(b"\r\n\r\n")
+                if not sep:
+                    continue
+                payload = payload.rstrip(b"\r\n")
+
+                headers: dict[str, str] = {}
+                for line in header_blob.split(b"\r\n"):
+                    key_raw, _, value_raw = line.partition(b":")
+                    if not key_raw:
+                        continue
+                    key = key_raw.decode("utf-8", errors="ignore").strip().lower()
+                    value = value_raw.decode("utf-8", errors="ignore").strip()
+                    headers[key] = value
+
+                disposition = headers.get("content-disposition", "")
+                disp_parts = [item.strip() for item in disposition.split(";")]
+                if not disp_parts or disp_parts[0].lower() != "form-data":
+                    continue
+                disp_params: dict[str, str] = {}
+                for item in disp_parts[1:]:
+                    name, sep_eq, value = item.partition("=")
+                    if not sep_eq:
+                        continue
+                    disp_params[name.strip().lower()] = value.strip().strip('"')
+
+                field_name = disp_params.get("name", "")
+                if not field_name:
+                    continue
+                part_filename = disp_params.get("filename")
+                if part_filename is not None:
+                    filename = part_filename
+                    file_bytes = payload
+                else:
+                    fields[field_name] = payload.decode("utf-8", errors="replace")
+
+            if file_bytes is None:
+                self._send_json({"error": "Missing file field", "reason": "validation"}, status=400)
+                return None
+            filename = filename.strip()
+            if not filename:
+                self._send_json({"error": "Uploaded file is missing a filename", "reason": "validation"}, status=400)
+                return None
+            data = file_bytes
+            if not isinstance(data, bytes) or len(data) == 0:
+                self._send_json({"error": "Uploaded file is empty", "reason": "validation"}, status=400)
+                return None
+            return fields, filename, data
 
         def _int_field(
             self,
@@ -375,6 +489,101 @@ def build_handler(
             thread = threading.Thread(target=run_default_pack_install, daemon=True)
             thread.start()
             self._send_json({"started": True, "job": dict(default_install_job)})
+
+        def _handle_tone_library_get(self) -> None:
+            try:
+                library = get_tone_library().list_library()
+                self._send_json({"ok": True, "library": library})
+            except Exception as exc:
+                self._send_json(
+                    {"error": f"Failed to load tone library: {exc}", "reason": "tone_library_failed"},
+                    status=500,
+                )
+
+        def _handle_tone_import_model(self) -> None:
+            parsed = self._read_multipart_payload()
+            if parsed is None:
+                return
+            fields, filename, data = parsed
+            source_path = fields.get("source_path", filename)
+            try:
+                tone = get_tone_library().import_model(
+                    filename=filename,
+                    data=data,
+                    source_path=source_path,
+                )
+                self._send_json({"ok": True, "tone": tone, "library": get_tone_library().list_library()})
+            except ToneLibraryError as exc:
+                self._send_json({"error": str(exc), "reason": exc.code}, status=exc.status)
+            except Exception as exc:
+                self._send_json(
+                    {"error": f"Model import failed: {exc}", "reason": "tone_import_failed"},
+                    status=500,
+                )
+
+        def _handle_tone_import_ir(self) -> None:
+            parsed = self._read_multipart_payload()
+            if parsed is None:
+                return
+            fields, filename, data = parsed
+            tone_id = fields.get("tone_id", "").strip() or None
+            try:
+                payload = get_tone_library().import_ir(
+                    filename=filename,
+                    data=data,
+                    tone_id=tone_id,
+                )
+                self._send_json({"ok": True, **payload, "library": get_tone_library().list_library()})
+            except ToneLibraryError as exc:
+                self._send_json({"error": str(exc), "reason": exc.code}, status=exc.status)
+            except Exception as exc:
+                self._send_json(
+                    {"error": f"IR import failed: {exc}", "reason": "ir_import_failed"},
+                    status=500,
+                )
+
+        def _handle_tone_attach_ir(self) -> None:
+            payload = self._read_json_payload()
+            if payload is None:
+                return
+            tone_id = str(payload.get("tone_id", "")).strip()
+            ir_id_raw = payload.get("ir_id")
+            if not tone_id:
+                self._send_json({"error": "'tone_id' is required", "reason": "validation"}, status=400)
+                return
+            if ir_id_raw is None:
+                ir_id = None
+            else:
+                ir_id = str(ir_id_raw).strip() or None
+            try:
+                tone = get_tone_library().attach_ir(tone_id=tone_id, ir_id=ir_id)
+                self._send_json({"ok": True, "tone": tone, "library": get_tone_library().list_library()})
+            except ToneLibraryError as exc:
+                self._send_json({"error": str(exc), "reason": exc.code}, status=exc.status)
+            except Exception as exc:
+                self._send_json(
+                    {"error": f"IR attach failed: {exc}", "reason": "ir_attach_failed"},
+                    status=500,
+                )
+
+        def _handle_tone_remove(self) -> None:
+            payload = self._read_json_payload()
+            if payload is None:
+                return
+            tone_id = str(payload.get("tone_id", "")).strip()
+            if not tone_id:
+                self._send_json({"error": "'tone_id' is required", "reason": "validation"}, status=400)
+                return
+            try:
+                result = get_tone_library().remove_tone(tone_id=tone_id)
+                self._send_json({"ok": True, **result})
+            except ToneLibraryError as exc:
+                self._send_json({"error": str(exc), "reason": exc.code}, status=exc.status)
+            except Exception as exc:
+                self._send_json(
+                    {"error": f"Tone remove failed: {exc}", "reason": "tone_remove_failed"},
+                    status=500,
+                )
 
         def _handle_audio_play_note(self) -> None:
             payload = self._read_json_payload()

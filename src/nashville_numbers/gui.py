@@ -18,8 +18,10 @@ from .audio import get_audio_service
 from .converter import convert
 from .gui_http import build_handler
 from .music_lab import build_progression_plan
+from .tone_library import ToneLibrary
 
 MAX_INPUT_LENGTH = 1_000_000  # 1MB
+MAX_UPLOAD_LENGTH = 20 * 1024 * 1024  # 20MB
 MAX_ACTIVE_CONVERSIONS = 4
 
 
@@ -38,9 +40,16 @@ def _new_install_job(kind: str) -> dict[str, object]:
 class GuiApp:
     """Stateful container for the embedded GUI runtime."""
 
-    def __init__(self, *, audio_service_factory: Callable[[], object] = get_audio_service) -> None:
+    def __init__(
+        self,
+        *,
+        audio_service_factory: Callable[[], object] = get_audio_service,
+        tone_library_factory: Callable[[], ToneLibrary] = ToneLibrary,
+    ) -> None:
         self._audio_service_factory = audio_service_factory
+        self._tone_library_factory = tone_library_factory
         self._audio_service: object | None = None
+        self._tone_library: ToneLibrary | None = None
         self._session_id = secrets.token_urlsafe(24)
         self._session_secret = secrets.token_urlsafe(32)
         self._session_cookie_name = "nns_session"
@@ -59,6 +68,11 @@ class GuiApp:
     def get_initialized_audio_service(self) -> object | None:
         return self._audio_service
 
+    def get_tone_library(self) -> ToneLibrary:
+        if self._tone_library is None:
+            self._tone_library = self._tone_library_factory()
+        return self._tone_library
+
     def get_html(self) -> str:
         return _HTML
 
@@ -70,6 +84,9 @@ class GuiApp:
 
     def get_max_input_length(self) -> int:
         return MAX_INPUT_LENGTH
+
+    def get_max_upload_length(self) -> int:
+        return MAX_UPLOAD_LENGTH
 
     def find_free_port(self, start: int | None = None) -> int:
         if start is None:
@@ -167,6 +184,8 @@ class GuiApp:
             convert_text=self.convert_text,
             plan_arrangement=self.plan_arrangement,
             get_max_input_length=self.get_max_input_length,
+            get_max_upload_length=self.get_max_upload_length,
+            get_tone_library=self.get_tone_library,
             default_install_job=self.default_install_job,
             runtime_install_job=self.runtime_install_job,
             install_job_lock=self.install_job_lock,
@@ -1852,15 +1871,119 @@ _HTML = r"""<!DOCTYPE html>
     gap: 0.55rem;
   }
 
-  .arrangement-placeholder strong {
-    color: var(--text);
-    font-size: 0.98rem;
-  }
+    .arrangement-placeholder strong {
+      color: var(--text);
+      font-size: 0.98rem;
+    }
 
-  .arrangement-sections {
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
+    .tone-library-panel {
+      margin-top: 0.9rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .tone-library-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .tone-library-status {
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .tone-library-list {
+      margin-top: 0.7rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+    }
+
+    .tone-row {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.025);
+      padding: 0.55rem 0.65rem;
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .tone-row-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .tone-name {
+      font-weight: 700;
+      font-size: 0.88rem;
+    }
+
+    .tone-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+    }
+
+    .tone-pill {
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      padding: 0.14rem 0.42rem;
+      font-size: 0.64rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .tone-pill.compat-compatible {
+      color: #7bffc9;
+      border-color: rgba(123, 255, 201, 0.34);
+    }
+
+    .tone-pill.compat-warning {
+      color: #ffd38e;
+      border-color: rgba(255, 211, 142, 0.34);
+    }
+
+    .tone-pill.compat-unknown {
+      color: #b7bbd8;
+      border-color: rgba(183, 187, 216, 0.34);
+    }
+
+    .tone-pill.compat-incompatible {
+      color: #ff8e98;
+      border-color: rgba(255, 142, 152, 0.34);
+    }
+
+    .tone-sub {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
+    }
+
+    .tone-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .tone-select {
+      background: #121229;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 0.3rem 0.45rem;
+      font-size: 0.72rem;
+    }
+
+    .arrangement-sections {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
   }
 
   .timeline-section {
@@ -2353,6 +2476,26 @@ _HTML = r"""<!DOCTYPE html>
           <div class="lab-transport-status" id="labTransportStatus">
             Waiting for a progression. The first implementation stage is a transport and arrangement planner on top of the current playback stack.
           </div>
+
+          <div class="tone-library-panel">
+            <div class="section-label" style="margin-bottom:0.5rem">Tone Library</div>
+            <div class="lab-analysis" style="margin:0 0 0.65rem">
+              Import local NAM models and optional IR files. Preview is coming in the next phase.
+            </div>
+            <div class="tone-library-actions">
+              <button class="btn-transport secondary" id="toneImportModelBtn" onclick="openToneModelPicker()">Import Model (.nam)</button>
+              <button class="btn-transport ghost" id="toneImportIrBtn" onclick="openToneIrPicker()">Import IR (.wav)</button>
+              <span id="toneLibraryStatus" class="tone-library-status" aria-live="polite"></span>
+            </div>
+            <input id="toneModelInput" type="file" accept=".nam,application/json" style="display:none" />
+            <input id="toneIrInput" type="file" accept=".wav,audio/wav" style="display:none" />
+            <div id="toneLibraryList" class="tone-library-list" aria-live="polite">
+              <div class="arrangement-placeholder">
+                <strong>No tones imported yet.</strong>
+                <span>Bring in a `.nam` model to start building your local tone slot list.</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="lab-panel timeline-shell">
@@ -2598,6 +2741,11 @@ let musicLabState = {
   loopEnabled: true,
   activeSlotKey: '',
   lastBuiltInput: ''
+};
+let toneLibraryState = {
+  tones: [],
+  irs: [],
+  pendingToneForIr: null
 };
 
 const webTone = (() => {
@@ -3611,6 +3759,234 @@ async function exportMidi() {
   }
 }
 
+function setToneLibraryStatus(message) {
+  const status = document.getElementById('toneLibraryStatus');
+  if (!status) return;
+  status.textContent = message || '';
+}
+
+function openToneModelPicker() {
+  const input = document.getElementById('toneModelInput');
+  if (!input) return;
+  input.value = '';
+  input.click();
+}
+
+function openToneIrPicker(toneId = null) {
+  toneLibraryState.pendingToneForIr = toneId;
+  const input = document.getElementById('toneIrInput');
+  if (!input) return;
+  input.value = '';
+  input.click();
+}
+
+function renderToneLibrary() {
+  const container = document.getElementById('toneLibraryList');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!toneLibraryState.tones.length) {
+    container.innerHTML = `
+      <div class="arrangement-placeholder">
+        <strong>No tones imported yet.</strong>
+        <span>Bring in a \`.nam\` model to start building your local tone slot list.</span>
+      </div>
+    `;
+    return;
+  }
+
+  toneLibraryState.tones.forEach(tone => {
+    const row = document.createElement('div');
+    row.className = 'tone-row';
+
+    const top = document.createElement('div');
+    top.className = 'tone-row-top';
+    const name = document.createElement('div');
+    name.className = 'tone-name';
+    name.textContent = tone.name || tone.model_file;
+    top.appendChild(name);
+
+    const compat = document.createElement('span');
+    const compatKey = String(tone.compatibility || 'unknown').toLowerCase();
+    compat.className = `tone-pill compat-${compatKey}`;
+    compat.textContent = compatKey;
+    top.appendChild(compat);
+    row.appendChild(top);
+
+    const meta = document.createElement('div');
+    meta.className = 'tone-meta';
+    const arch = document.createElement('span');
+    arch.className = 'tone-pill';
+    arch.textContent = `arch: ${tone.metadata?.architecture || 'n/a'}`;
+    const version = document.createElement('span');
+    version.className = 'tone-pill';
+    version.textContent = `v: ${tone.metadata?.version || 'n/a'}`;
+    meta.appendChild(arch);
+    meta.appendChild(version);
+    row.appendChild(meta);
+
+    const sub = document.createElement('div');
+    sub.className = 'tone-sub';
+    sub.textContent = tone.ir_file ? `IR: ${tone.ir_file}` : 'IR: none attached';
+    row.appendChild(sub);
+
+    const actions = document.createElement('div');
+    actions.className = 'tone-actions';
+
+    const irSelect = document.createElement('select');
+    irSelect.className = 'tone-select';
+    const noneOpt = document.createElement('option');
+    noneOpt.value = '';
+    noneOpt.textContent = 'No IR';
+    irSelect.appendChild(noneOpt);
+    (toneLibraryState.irs || []).forEach(ir => {
+      const opt = document.createElement('option');
+      opt.value = ir.id;
+      opt.textContent = ir.name || ir.file;
+      if (tone.ir_id && tone.ir_id === ir.id) {
+        opt.selected = true;
+      }
+      irSelect.appendChild(opt);
+    });
+    irSelect.addEventListener('change', () => {
+      attachIrToTone(tone.id, irSelect.value || null);
+    });
+    actions.appendChild(irSelect);
+
+    const attachBtn = document.createElement('button');
+    attachBtn.className = 'btn-transport ghost';
+    attachBtn.type = 'button';
+    attachBtn.textContent = 'Import IR for Tone';
+    attachBtn.addEventListener('click', () => openToneIrPicker(tone.id));
+    actions.appendChild(attachBtn);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'btn-transport ghost';
+    removeBtn.type = 'button';
+    removeBtn.textContent = 'Remove';
+    removeBtn.addEventListener('click', () => removeTone(tone.id));
+    actions.appendChild(removeBtn);
+
+    row.appendChild(actions);
+    container.appendChild(row);
+  });
+}
+
+async function refreshToneLibrary() {
+  try {
+    const response = await appFetch('/tone/library');
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || 'Tone library request failed');
+    }
+    const library = body.library || { tones: [], irs: [] };
+    toneLibraryState.tones = library.tones || [];
+    toneLibraryState.irs = library.irs || [];
+    renderToneLibrary();
+    setToneLibraryStatus(`Loaded ${toneLibraryState.tones.length} tone(s).`);
+  } catch (err) {
+    setToneLibraryStatus(`Tone library unavailable: ${err.message}`);
+  }
+}
+
+async function importToneModel(file) {
+  const formData = new FormData();
+  formData.append('file', file, file.name);
+  try {
+    const response = await appFetch('/tone/import-model', { method: 'POST', body: formData });
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || 'Model import failed');
+    }
+    toneLibraryState.tones = body.library?.tones || [];
+    toneLibraryState.irs = body.library?.irs || [];
+    renderToneLibrary();
+    setToneLibraryStatus(`Imported model: ${body.tone?.name || file.name}`);
+  } catch (err) {
+    setToneLibraryStatus(`Model import failed: ${err.message}`);
+  }
+}
+
+async function importToneIr(file, toneId = null) {
+  const formData = new FormData();
+  formData.append('file', file, file.name);
+  if (toneId) formData.append('tone_id', toneId);
+  try {
+    const response = await appFetch('/tone/import-ir', { method: 'POST', body: formData });
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || 'IR import failed');
+    }
+    toneLibraryState.tones = body.library?.tones || [];
+    toneLibraryState.irs = body.library?.irs || [];
+    renderToneLibrary();
+    setToneLibraryStatus(`Imported IR: ${body.ir?.name || file.name}`);
+  } catch (err) {
+    setToneLibraryStatus(`IR import failed: ${err.message}`);
+  } finally {
+    toneLibraryState.pendingToneForIr = null;
+  }
+}
+
+async function attachIrToTone(toneId, irId) {
+  try {
+    const response = await appFetch('/tone/attach-ir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tone_id: toneId, ir_id: irId })
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || 'Attach failed');
+    }
+    toneLibraryState.tones = body.library?.tones || [];
+    toneLibraryState.irs = body.library?.irs || [];
+    renderToneLibrary();
+  } catch (err) {
+    setToneLibraryStatus(`IR attach failed: ${err.message}`);
+  }
+}
+
+async function removeTone(toneId) {
+  try {
+    const response = await appFetch('/tone/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tone_id: toneId })
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || 'Tone remove failed');
+    }
+    toneLibraryState.tones = body.library?.tones || [];
+    toneLibraryState.irs = body.library?.irs || [];
+    renderToneLibrary();
+    setToneLibraryStatus('Tone removed.');
+  } catch (err) {
+    setToneLibraryStatus(`Tone remove failed: ${err.message}`);
+  }
+}
+
+function initToneLibrary() {
+  const modelInput = document.getElementById('toneModelInput');
+  if (modelInput) {
+    modelInput.addEventListener('change', event => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      importToneModel(file);
+    });
+  }
+  const irInput = document.getElementById('toneIrInput');
+  if (irInput) {
+    irInput.addEventListener('change', event => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      importToneIr(file, toneLibraryState.pendingToneForIr);
+    });
+  }
+  refreshToneLibrary();
+}
+
 function initMusicLab() {
   renderGrooveOptions();
   syncMusicLabSummary();
@@ -4512,6 +4888,7 @@ window.addEventListener('resize', () => {
 window.addEventListener('load', () => {
   initBuilder();
   initMusicLab();
+  initToneLibrary();
   refreshAudioStatus();
 });
 

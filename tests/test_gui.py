@@ -4,6 +4,7 @@ import json
 import socket
 import threading
 import time
+import uuid
 from http.client import HTTPConnection
 import types
 from typing import Any
@@ -12,6 +13,7 @@ import pytest
 
 from nashville_numbers.audio import AudioInstallError, AudioUnavailableError
 from nashville_numbers.music_lab import build_progression_plan
+from nashville_numbers.tone_library import ToneLibrary
 import nashville_numbers.gui as gui
 
 
@@ -173,6 +175,44 @@ def _post_json(
     return status, headers, json.loads(text)
 
 
+def _post_multipart(
+    port: int,
+    path: str,
+    *,
+    filename: str,
+    file_bytes: bytes,
+    fields: dict[str, str] | None = None,
+    authenticated: bool = True,
+) -> tuple[int, dict[str, str], dict[str, Any]]:
+    boundary = f"----nns-{uuid.uuid4().hex}"
+    parts: list[bytes] = []
+    for key, value in (fields or {}).items():
+        parts.append(
+            (
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="{key}"\r\n\r\n'
+                f"{value}\r\n"
+            ).encode("utf-8")
+        )
+    parts.append(
+        (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            "Content-Type: application/octet-stream\r\n\r\n"
+        ).encode("utf-8")
+        + file_bytes
+        + b"\r\n"
+    )
+    parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+    body = b"".join(parts)
+    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    if authenticated:
+        _AUTH_PORT["port"] = port
+        headers = _auth_headers(headers)
+    status, headers, text = _request(port, "POST", path, body=body, headers=headers)
+    return status, headers, json.loads(text)
+
+
 def _get_json(
     port: int, path: str, *, authenticated: bool = True
 ) -> tuple[int, dict[str, str], dict[str, Any]]:
@@ -207,6 +247,7 @@ def _poll_until_done_default(port: int, *, timeout: float = 3.0, interval: float
 def reset_runtime_install_job() -> None:
     """Reset the global job state before every test to prevent state leakage."""
     gui._DEFAULT_APP._audio_service = None
+    gui._DEFAULT_APP._tone_library = None
     gui._DEFAULT_APP.handler_class = None
     with gui._DEFAULT_APP.install_job_lock:
         gui._DEFAULT_APP.runtime_install_job.update(
@@ -215,6 +256,13 @@ def reset_runtime_install_job() -> None:
         gui._DEFAULT_APP.default_install_job.update(
             {"id": "", "running": False, "stage": "", "pct": 0, "result": None, "error": None}
         )
+
+
+@pytest.fixture
+def tone_library_tmp(monkeypatch: pytest.MonkeyPatch, tmp_path) -> ToneLibrary:
+    library = ToneLibrary(root_dir=tmp_path / "tones")
+    monkeypatch.setattr(gui._DEFAULT_APP, "_tone_library", library)
+    return library
 
 
 @pytest.fixture
@@ -274,6 +322,132 @@ def test_get_audio_status_returns_current_audio_state(
 
 def test_get_audio_status_requires_session(gui_server: int) -> None:
     status, _headers, payload = _get_json(gui_server, "/audio/status", authenticated=False)
+    assert status == 403
+    assert payload == {"error": "Forbidden", "reason": "session_invalid"}
+
+
+def test_get_tone_library_requires_session(gui_server: int, tone_library_tmp: ToneLibrary) -> None:
+    status, _headers, payload = _get_json(gui_server, "/tone/library", authenticated=False)
+    assert status == 403
+    assert payload == {"error": "Forbidden", "reason": "session_invalid"}
+
+
+def test_get_tone_library_returns_empty_payload(
+    gui_server: int, tone_library_tmp: ToneLibrary
+) -> None:
+    status, _headers, payload = _get_json(gui_server, "/tone/library")
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["library"]["tones"] == []
+    assert payload["library"]["irs"] == []
+
+
+def test_post_tone_import_model_and_remove_updates_library(
+    gui_server: int, tone_library_tmp: ToneLibrary
+) -> None:
+    model = (
+        b'{'
+        b'"name":"Twin Clean",'
+        b'"version":"0.9.0",'
+        b'"architecture":"wavenet",'
+        b'"sample_rate":48000,'
+        b'"weights":[1,2,3]'
+        b'}'
+    )
+    status, _headers, payload = _post_multipart(
+        gui_server,
+        "/tone/import-model",
+        filename="twin.nam",
+        file_bytes=model,
+    )
+    assert status == 200
+    assert payload["ok"] is True
+    tone = payload["tone"]
+    assert tone["name"] == "Twin Clean"
+    assert tone["compatibility"] == "compatible"
+    assert tone["metadata"]["architecture"] == "wavenet"
+
+    status, _headers, payload = _post_json(
+        gui_server,
+        "/tone/remove",
+        {"tone_id": tone["id"]},
+    )
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["removed_id"] == tone["id"]
+    assert payload["library"]["tones"] == []
+
+
+def test_post_tone_import_model_rejects_invalid_format(
+    gui_server: int, tone_library_tmp: ToneLibrary
+) -> None:
+    status, _headers, payload = _post_multipart(
+        gui_server,
+        "/tone/import-model",
+        filename="bad.nam",
+        file_bytes=b"not-json",
+    )
+    assert status == 415
+    assert payload["reason"] == "invalid_model_format"
+
+
+def test_post_tone_import_ir_attach_and_detach(
+    gui_server: int, tone_library_tmp: ToneLibrary
+) -> None:
+    model = b'{"version":"0.8","architecture":"unknown-arch","weights":[]}'
+    status, _headers, payload = _post_multipart(
+        gui_server,
+        "/tone/import-model",
+        filename="amp.nam",
+        file_bytes=model,
+    )
+    assert status == 200
+    tone_id = payload["tone"]["id"]
+    assert payload["tone"]["compatibility"] == "warning"
+
+    status, _headers, payload = _post_multipart(
+        gui_server,
+        "/tone/import-ir",
+        filename="cab.wav",
+        file_bytes=b"RIFF....WAVEfmt ",
+        fields={"tone_id": tone_id},
+    )
+    assert status == 200
+    assert payload["ok"] is True
+    ir_id = payload["ir"]["id"]
+    assert payload["tone"]["ir_id"] == ir_id
+
+    status, _headers, payload = _post_json(
+        gui_server,
+        "/tone/attach-ir",
+        {"tone_id": tone_id, "ir_id": None},
+    )
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["tone"]["ir_file"] is None
+
+
+def test_post_tone_import_rejects_wrong_extension(
+    gui_server: int, tone_library_tmp: ToneLibrary
+) -> None:
+    status, _headers, payload = _post_multipart(
+        gui_server,
+        "/tone/import-ir",
+        filename="cab.mp3",
+        file_bytes=b"fake",
+    )
+    assert status == 415
+    assert payload["reason"] == "invalid_extension"
+
+
+def test_post_tone_import_requires_session(gui_server: int, tone_library_tmp: ToneLibrary) -> None:
+    status, _headers, payload = _post_multipart(
+        gui_server,
+        "/tone/import-model",
+        filename="ok.nam",
+        file_bytes=b'{"version":"0.9","architecture":"wavenet","weights":[]}',
+        authenticated=False,
+    )
     assert status == 403
     assert payload == {"error": "Forbidden", "reason": "session_invalid"}
 
