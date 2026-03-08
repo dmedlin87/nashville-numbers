@@ -70,7 +70,22 @@ def build_handler(
         def log_message(self, format: str, *args: object) -> None:  # silence access logs
             pass
 
+        def _validate_host(self) -> bool:
+            host_header = self.headers.get("Host", "")
+            if not host_header:
+                return False
+            # Handle IPv6 properly
+            host_name = host_header.strip().lower()
+            if host_name.startswith("["):
+                host_name = host_name.split("]")[0] + "]"
+            else:
+                host_name = host_name.split(":")[0]
+            return host_name in {"127.0.0.1", "localhost", "[::1]", "::1"}
+
         def do_GET(self) -> None:
+            if not self._validate_host():
+                self._send_json({"error": "Forbidden", "reason": "invalid_host"}, status=403)
+                return
             parsed = urlparse(self.path)
             if parsed.path in protected_get_paths and not self._require_session():
                 return
@@ -90,6 +105,9 @@ def build_handler(
                 self._send_json({"error": "not found"}, status=404)
 
         def do_POST(self) -> None:
+            if not self._validate_host():
+                self._send_json({"error": "Forbidden", "reason": "invalid_host"}, status=403)
+                return
             parsed = urlparse(self.path)
             if parsed.path in protected_post_paths and not self._require_session(drain_body=True):
                 return
