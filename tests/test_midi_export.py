@@ -9,6 +9,8 @@ from nashville_numbers.midi_export import (
     _vlq,
     _ms_to_ticks,
     _TICKS_PER_BEAT,
+    _program_change,
+    _time_sig_meta,
     export_midi_bytes,
     export_midi_file,
 )
@@ -80,15 +82,15 @@ class TestMidiFileStructure:
         chunk_len, fmt, num_tracks, division = struct.unpack_from(">IhhH", data, 4)
         assert chunk_len == 6
         assert fmt == 1           # Type 1
-        assert num_tracks == 2    # tempo track + note track
+        assert num_tracks >= 3    # tempo + chord stem + bass stem (+ optional count-in)
         assert division == _TICKS_PER_BEAT
 
-    def test_has_two_tracks(self):
+    def test_has_expected_track_count(self):
         plan = _make_plan()
         data = export_midi_bytes(plan)
-        # Count MTrk occurrences.
+        # Count MTrk occurrences: tempo + chords + bass + count-in = 4.
         count = data.count(b"MTrk")
-        assert count == 2
+        assert count == 4
 
     def test_non_empty_output(self):
         plan = _make_plan()
@@ -185,3 +187,71 @@ class TestPreBuiltSequence:
         data_internal = export_midi_bytes(plan)
         data_external = export_midi_bytes(plan, sequence=seq)
         assert data_internal == data_external
+
+
+# ---------------------------------------------------------------------------
+# Stem track separation
+# ---------------------------------------------------------------------------
+
+
+class TestStemTracks:
+    def test_four_tracks_with_count_in(self):
+        plan = _make_plan()
+        data = export_midi_bytes(plan, include_count_in=True)
+        assert data.count(b"MTrk") == 4
+
+    def test_three_tracks_without_count_in(self):
+        plan = _make_plan()
+        data = export_midi_bytes(plan, include_count_in=False)
+        # No count-in events → no count-in track; tempo + chords + bass = 3.
+        assert data.count(b"MTrk") == 3
+
+    def test_header_num_tracks_matches_mtrk_count(self):
+        plan = _make_plan()
+        data = export_midi_bytes(plan)
+        _, _, num_tracks, _ = struct.unpack_from(">IhhH", data, 4)
+        assert num_tracks == data.count(b"MTrk")
+
+
+# ---------------------------------------------------------------------------
+# Program change helper
+# ---------------------------------------------------------------------------
+
+
+class TestProgramChange:
+    def test_channel_0_program_0(self):
+        assert _program_change(0, 0) == b"\xC0\x00"
+
+    def test_channel_1_program_33(self):
+        assert _program_change(1, 33) == b"\xC1\x21"
+
+    def test_program_change_in_midi_output(self):
+        plan = _make_plan()
+        data = export_midi_bytes(plan)
+        # Chord stem (channel 0) should have a program change.
+        assert b"\xC0" in data
+        # Bass stem (channel 1) should have a program change.
+        assert b"\xC1" in data
+
+
+# ---------------------------------------------------------------------------
+# Time signature meta-event
+# ---------------------------------------------------------------------------
+
+
+class TestTimeSigMeta:
+    def test_4_4_time(self):
+        meta = _time_sig_meta(4)
+        assert meta[:3] == b"\xFF\x58\x04"
+        assert meta[3] == 4   # numerator
+        assert meta[4] == 2   # denominator power (2^2 = 4)
+
+    def test_6_8_time(self):
+        meta = _time_sig_meta(6, denominator_power=3)
+        assert meta[3] == 6
+        assert meta[4] == 3
+
+    def test_time_sig_in_midi_output(self):
+        plan = _make_plan()
+        data = export_midi_bytes(plan)
+        assert b"\xFF\x58\x04" in data

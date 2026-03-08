@@ -36,6 +36,14 @@ def _tempo_meta(bpm: int) -> bytes:
     return b"\xFF\x51\x03" + struct.pack(">I", uspqn)[1:]
 
 
+def _time_sig_meta(numerator: int, denominator_power: int = 2) -> bytes:
+    """Return a time signature meta-event (FF 58 04 nn dd cc bb).
+
+    *denominator_power* encodes the denominator as a power of 2 (e.g. 2 = quarter note).
+    """
+    return b"\xFF\x58\x04" + bytes([numerator, denominator_power, 24, 8])
+
+
 def _end_of_track() -> bytes:
     """Return an end-of-track meta-event (FF 2F 00)."""
     return b"\xFF\x2F\x00"
@@ -64,6 +72,68 @@ def _note_off(channel: int, midi: int) -> bytes:
     return bytes([0x80 | (channel & 0x0F), midi & 0x7F, 0])
 
 
+def _program_change(channel: int, program: int) -> bytes:
+    """Return a MIDI Program Change message (C0-CF pp)."""
+    return bytes([0xC0 | (channel & 0x0F), program & 0x7F])
+
+
+# ---------------------------------------------------------------------------
+# Stem track builder
+# ---------------------------------------------------------------------------
+
+
+def _build_stem_track(
+    events: list[dict[str, Any]],
+    bpm: int,
+    *,
+    channel: int,
+    program: int | None,
+) -> bytes:
+    """Build a single MTrk from a list of sequence events for one stem."""
+    abs_events: list[tuple[int, int, int, int, int]] = []
+
+    for event in events:
+        if event["kind"] == "note":
+            midi = event["midi"]
+            vel = event["velocity"]
+            on_tick = _ms_to_ticks(event["delay_ms"], bpm)
+            off_tick = _ms_to_ticks(event["delay_ms"] + event["duration_ms"], bpm)
+            abs_events.append((on_tick, 1, channel, midi, vel))
+            abs_events.append((off_tick, 0, channel, midi, 0))
+        elif event["kind"] == "chord":
+            midis = event["midis"]
+            vel = event["velocity"]
+            style = event.get("style", "block")
+            strum_ms = event.get("strum_ms", 0)
+            for i, midi in enumerate(midis):
+                strum_offset = i * strum_ms if style == "strum" else 0
+                on_tick = _ms_to_ticks(event["delay_ms"] + strum_offset, bpm)
+                off_tick = _ms_to_ticks(
+                    event["delay_ms"] + strum_offset + event["duration_ms"], bpm
+                )
+                abs_events.append((on_tick, 1, channel, midi, vel))
+                abs_events.append((off_tick, 0, channel, midi, 0))
+
+    abs_events.sort(key=lambda e: (e[0], e[1]))
+
+    track_events: list[tuple[int, bytes]] = []
+
+    if program is not None:
+        track_events.append((0, _program_change(channel, program)))
+
+    prev_tick = 0
+    for abs_tick, order, ch, midi, vel in abs_events:
+        delta = abs_tick - prev_tick
+        if order == 1:
+            track_events.append((delta, _note_on(ch, midi, vel)))
+        else:
+            track_events.append((delta, _note_off(ch, midi)))
+        prev_tick = abs_tick
+
+    track_events.append((0, _end_of_track()))
+    return _track_chunk(track_events)
+
+
 # ---------------------------------------------------------------------------
 # High-level export API
 # ---------------------------------------------------------------------------
@@ -75,7 +145,7 @@ def export_midi_bytes(
     sequence: dict[str, Any] | None = None,
     include_count_in: bool = True,
 ) -> bytes:
-    """Export a plan as Standard MIDI File bytes (Type 1, 2 tracks).
+    """Export a plan as Standard MIDI File bytes (Type 1, stem-separated).
 
     If *sequence* is ``None``, calls ``build_arrangement_sequence(plan)``
     internally.  Returns raw bytes suitable for writing to a ``.mid`` file.
@@ -84,75 +154,55 @@ def export_midi_bytes(
         sequence = build_arrangement_sequence(plan)
 
     bpm = plan["tempo"]
+    meter = plan.get("meter", 4)
+    groove = plan.get("groove", {})
+    ci_end_ms = _count_in_end_ms(plan)
 
-    # --- Track 0: tempo ---
+    # --- Track 0: tempo + time signature ---
     tempo_track = _track_chunk([
+        (0, _time_sig_meta(meter)),
         (0, _tempo_meta(bpm)),
         (0, _end_of_track()),
     ])
 
-    # --- Track 1: notes ---
-    # Collect absolute-tick (on/off, channel, midi, velocity) tuples,
-    # then sort by tick and convert to delta-time stream.
-    abs_events: list[tuple[int, int, int, int, int]] = []
-    # Each tuple: (abs_tick, order, channel, midi, velocity)
-    # order: 0 = note-off, 1 = note-on (so note-offs sort before note-ons at same tick)
-
-    count_in_beats = plan.get("count_in_beats", 4)
-    order_counter = 0
+    # --- Partition events by stem ---
+    chord_events: list[dict[str, Any]] = []
+    bass_events: list[dict[str, Any]] = []
+    countin_events: list[dict[str, Any]] = []
 
     for event in sequence["events"]:
-        # Optionally skip count-in.
-        if not include_count_in and event["delay_ms"] < _count_in_end_ms(plan):
+        if not include_count_in and event["delay_ms"] < ci_end_ms:
             continue
 
-        if event["kind"] == "note":
-            midi = event["midi"]
-            vel = event["velocity"]
-            ch = event["channel"]
-            on_tick = _ms_to_ticks(event["delay_ms"], bpm)
-            off_tick = _ms_to_ticks(event["delay_ms"] + event["duration_ms"], bpm)
-            abs_events.append((on_tick, 1, ch, midi, vel))
-            abs_events.append((off_tick, 0, ch, midi, 0))
-            order_counter += 2
-
+        if event["kind"] == "note" and event["channel"] == 0:
+            if event["delay_ms"] < ci_end_ms:
+                countin_events.append(event)
+            else:
+                chord_events.append(event)
         elif event["kind"] == "chord":
-            midis = event["midis"]
-            vel = event["velocity"]
-            ch = event["channel"]
-            style = event.get("style", "block")
-            strum_ms = event.get("strum_ms", 0)
+            chord_events.append(event)
+        elif event["channel"] == 1:
+            bass_events.append(event)
 
-            for i, midi in enumerate(midis):
-                strum_offset = i * strum_ms if style == "strum" else 0
-                on_tick = _ms_to_ticks(event["delay_ms"] + strum_offset, bpm)
-                off_tick = _ms_to_ticks(
-                    event["delay_ms"] + strum_offset + event["duration_ms"], bpm
-                )
-                abs_events.append((on_tick, 1, ch, midi, vel))
-                abs_events.append((off_tick, 0, ch, midi, 0))
+    tracks = [tempo_track]
 
-    # Sort: by tick, then note-off before note-on at same tick (order field).
-    abs_events.sort(key=lambda e: (e[0], e[1]))
+    # --- Track 1: Chords ---
+    chord_program = groove.get("chord_program", 0)
+    tracks.append(_build_stem_track(chord_events, bpm, channel=0, program=chord_program))
 
-    # Convert to delta-tick stream.
-    note_track_events: list[tuple[int, bytes]] = []
-    prev_tick = 0
-    for abs_tick, order, ch, midi, vel in abs_events:
-        delta = abs_tick - prev_tick
-        if order == 1:
-            note_track_events.append((delta, _note_on(ch, midi, vel)))
-        else:
-            note_track_events.append((delta, _note_off(ch, midi)))
-        prev_tick = abs_tick
+    # --- Track 2: Bass ---
+    bass_program = groove.get("bass_program", 33)
+    tracks.append(_build_stem_track(bass_events, bpm, channel=1, program=bass_program))
 
-    note_track_events.append((0, _end_of_track()))
-    note_track = _track_chunk(note_track_events)
+    # --- Track 3: Count-in (GM percussion, channel 9) ---
+    if countin_events:
+        tracks.append(_build_stem_track(countin_events, bpm, channel=9, program=None))
 
     # --- Header ---
-    header = b"MThd" + struct.pack(">IhhH", 6, 1, 2, _TICKS_PER_BEAT)
+    num_tracks = len(tracks)
+    header = b"MThd" + struct.pack(">IhhH", 6, 1, num_tracks, _TICKS_PER_BEAT)
 
-    return header + tempo_track + note_track
+    return header + b"".join(tracks)
 
 
 def export_midi_file(

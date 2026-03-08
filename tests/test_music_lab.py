@@ -93,11 +93,18 @@ class TestGroovePresetExpansion:
             assert "humanize_ms" in preset, f"{key} missing humanize_ms"
             assert "velocity_variance" in preset, f"{key} missing velocity_variance"
 
-    def test_defaults_are_zeroed(self):
+    def test_expression_values_match_presets(self):
+        expected = {
+            "anthem": {"swing": 0.0, "humanize_ms": 8, "velocity_variance": 6},
+            "pulse": {"swing": 0.0, "humanize_ms": 4, "velocity_variance": 4},
+            "lantern": {"swing": 0.3, "humanize_ms": 6, "velocity_variance": 8},
+            "pads": {"swing": 0.0, "humanize_ms": 0, "velocity_variance": 0},
+        }
         for key, preset in GROOVE_PRESETS.items():
-            assert preset["swing"] == 0.0, f"{key} swing not zeroed"
-            assert preset["humanize_ms"] == 0, f"{key} humanize_ms not zeroed"
-            assert preset["velocity_variance"] == 0, f"{key} velocity_variance not zeroed"
+            exp = expected[key]
+            assert preset["swing"] == exp["swing"], f"{key} swing mismatch"
+            assert preset["humanize_ms"] == exp["humanize_ms"], f"{key} humanize_ms mismatch"
+            assert preset["velocity_variance"] == exp["velocity_variance"], f"{key} velocity_variance mismatch"
 
     def test_plan_includes_expanded_groove(self):
         plan = build_progression_plan("C - F - G", groove="anthem")
@@ -105,3 +112,16 @@ class TestGroovePresetExpansion:
         assert "bass_hits" in g
         assert "chord_pattern" in g
         assert g["swing"] == 0.0
+
+    def test_all_presets_have_program_fields(self):
+        for key, preset in GROOVE_PRESETS.items():
+            assert "chord_program" in preset, f"{key} missing chord_program"
+            assert "bass_program" in preset, f"{key} missing bass_program"
+            assert isinstance(preset["chord_program"], int), f"{key} chord_program not int"
+            assert isinstance(preset["bass_program"], int), f"{key} bass_program not int"
+
+    def test_chord_pattern_entries_have_required_fields(self):
+        for key, preset in GROOVE_PRESETS.items():
+            for i, entry in enumerate(preset["chord_pattern"]):
+                assert "beat" in entry, f"{key} chord_pattern[{i}] missing beat"
+                assert "velocity_scale" in entry, f"{key} chord_pattern[{i}] missing velocity_scale"

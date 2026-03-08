@@ -51,31 +51,40 @@ class TestCountIn:
 
 class TestChordEvents:
     def test_chord_event_count(self):
-        plan = _make_plan()
+        plan = _make_plan(groove="pads")
         seq = build_arrangement_sequence(plan)
         chords = [e for e in seq["events"] if e["kind"] == "chord"]
-        # C - Am - F - G = 4 chords.
+        # C - Am - F - G = 4 chords (pads has single-hit chord_pattern).
         assert len(chords) == 4
 
-    def test_chord_event_fields(self):
+    def test_anthem_chord_count_with_multi_hit(self):
         plan = _make_plan(groove="anthem")
+        seq = build_arrangement_sequence(plan)
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        # Anthem now has 2 chord hits per slot: 4 slots * 2 = 8.
+        assert len(chords) == 8
+
+    def test_chord_event_fields(self):
+        plan = _make_plan(groove="pads")
         seq = build_arrangement_sequence(plan)
         chord = [e for e in seq["events"] if e["kind"] == "chord"][0]
         assert "midis" in chord
         assert len(chord["midis"]) >= 3
-        assert chord["style"] == "strum"
-        assert chord["strum_ms"] == 24
+        assert chord["style"] == "block"
+        assert chord["strum_ms"] == 0
         assert chord["channel"] == 0
         assert chord["velocity"] == 96
 
     def test_lantern_velocity(self):
         plan = _make_plan(groove="lantern")
+        plan["groove"]["humanize_ms"] = 0
+        plan["groove"]["velocity_variance"] = 0
         seq = build_arrangement_sequence(plan)
         chord = [e for e in seq["events"] if e["kind"] == "chord"][0]
         assert chord["velocity"] == 82
 
     def test_chord_timing(self):
-        plan = _make_plan(tempo=120, count_in_beats=4)
+        plan = _make_plan(tempo=120, count_in_beats=4, groove="pads")
         seq = build_arrangement_sequence(plan)
         beat_ms = 500  # 60000 / 120
         chords = [e for e in seq["events"] if e["kind"] == "chord"]
@@ -174,7 +183,7 @@ class TestMultiSlotBars:
         assert len(chords) == 4
 
     def test_subdivided_bar_timing(self):
-        plan = _make_plan(input_text="| C G | Am F |", tempo=120)
+        plan = _make_plan(input_text="| C G | Am F |", tempo=120, groove="pads")
         seq = build_arrangement_sequence(plan)
         beat_ms = 500
         chords = [e for e in seq["events"] if e["kind"] == "chord"]
@@ -193,10 +202,189 @@ class TestMultiSlotBars:
 
 class TestNnsInput:
     def test_nns_with_key(self):
-        plan = _make_plan(input_text="1 - 4 - 5 in C")
+        plan = _make_plan(input_text="1 - 4 - 5 in C", groove="pads")
         seq = build_arrangement_sequence(plan)
         chords = [e for e in seq["events"] if e["kind"] == "chord"]
         assert len(chords) == 3
         # All should have valid MIDI note lists.
         for c in chords:
             assert len(c["midis"]) >= 3
+
+
+# ---------------------------------------------------------------------------
+# Chord pattern consumption
+# ---------------------------------------------------------------------------
+
+
+def _make_custom_groove_plan(chord_pattern, input_text="C - Am - F - G", **kwargs):
+    """Build a plan with a custom groove that uses the given chord_pattern."""
+    plan = _make_plan(input_text=input_text, groove="anthem", **kwargs)
+    plan["groove"] = {
+        "id": "custom",
+        "chord_style": "block",
+        "strum_ms": 0,
+        "gate": 0.8,
+        "bass_pattern": "slot-roots",
+        "chord_pattern": chord_pattern,
+        "bass_hits": [{"beat": 0.0, "velocity": 86, "octave_offset": 0}],
+        "swing": 0.0,
+        "humanize_ms": 0,
+        "velocity_variance": 0,
+    }
+    return plan
+
+
+class TestChordPattern:
+    def test_multi_hit_produces_multiple_events(self):
+        plan = _make_custom_groove_plan([
+            {"beat": 0.0, "velocity_scale": 1.0},
+            {"beat": 2.0, "velocity_scale": 0.7},
+        ])
+        seq = build_arrangement_sequence(plan)
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        # 4 slots * 2 hits = 8 chord events.
+        assert len(chords) == 8
+
+    def test_velocity_scaling(self):
+        plan = _make_custom_groove_plan([
+            {"beat": 0.0, "velocity_scale": 1.0},
+            {"beat": 2.0, "velocity_scale": 0.5},
+        ])
+        seq = build_arrangement_sequence(plan)
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        # First hit: full velocity (96), second hit: scaled (48).
+        assert chords[0]["velocity"] == 96
+        assert chords[1]["velocity"] == 48
+
+    def test_timing_offset(self):
+        plan = _make_custom_groove_plan(
+            [{"beat": 0.0, "velocity_scale": 1.0}, {"beat": 2.0, "velocity_scale": 1.0}],
+            tempo=120,
+            count_in_beats=4,
+        )
+        seq = build_arrangement_sequence(plan)
+        beat_ms = 500
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        # First slot hits: beat 4 and beat 6.
+        assert chords[0]["delay_ms"] == round(4 * beat_ms)
+        assert chords[1]["delay_ms"] == round(6 * beat_ms)
+
+    def test_skips_hits_beyond_slot_duration(self):
+        # Slot is 4 beats, hit at beat 5.0 should be skipped.
+        plan = _make_custom_groove_plan([
+            {"beat": 0.0, "velocity_scale": 1.0},
+            {"beat": 5.0, "velocity_scale": 1.0},
+        ])
+        seq = build_arrangement_sequence(plan)
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        # Only the first hit fires per slot: 4 total.
+        assert len(chords) == 4
+
+    def test_single_hit_matches_original(self):
+        # Default single-hit pattern should produce identical output.
+        plan_default = _make_plan(groove="pads")
+        plan_custom = _make_custom_groove_plan(
+            [{"beat": 0.0, "velocity_scale": 1.0}],
+        )
+        # Override custom groove to match pads' chord_style and gate.
+        plan_custom["groove"]["chord_style"] = "block"
+        plan_custom["groove"]["gate"] = 1.0
+        seq_default = build_arrangement_sequence(plan_default)
+        seq_custom = build_arrangement_sequence(plan_custom)
+        default_chords = [e for e in seq_default["events"] if e["kind"] == "chord"]
+        custom_chords = [e for e in seq_custom["events"] if e["kind"] == "chord"]
+        assert len(default_chords) == len(custom_chords)
+
+
+# ---------------------------------------------------------------------------
+# Expression (swing, humanize, velocity variance)
+# ---------------------------------------------------------------------------
+
+
+def _make_expression_plan(swing=0.0, humanize_ms=0, velocity_variance=0, seed=42, **kwargs):
+    """Build a plan with custom expression parameters."""
+    plan = _make_plan(**kwargs)
+    plan["groove"]["swing"] = swing
+    plan["groove"]["humanize_ms"] = humanize_ms
+    plan["groove"]["velocity_variance"] = velocity_variance
+    plan["expression_seed"] = seed
+    return plan
+
+
+class TestExpression:
+    def test_zero_expression_is_noop(self):
+        plan_clean = _make_plan(groove="pads")
+        plan_zero = _make_expression_plan(swing=0.0, humanize_ms=0, velocity_variance=0, groove="pads")
+        seq_clean = build_arrangement_sequence(plan_clean)
+        seq_zero = build_arrangement_sequence(plan_zero)
+        assert seq_clean == seq_zero
+
+    def test_humanize_deterministic_with_seed(self):
+        plan1 = _make_expression_plan(humanize_ms=20, seed=99, groove="pads")
+        plan2 = _make_expression_plan(humanize_ms=20, seed=99, groove="pads")
+        seq1 = build_arrangement_sequence(plan1)
+        seq2 = build_arrangement_sequence(plan2)
+        assert seq1 == seq2
+
+    def test_humanize_different_seed_different_output(self):
+        plan1 = _make_expression_plan(humanize_ms=20, seed=1, groove="pads")
+        plan2 = _make_expression_plan(humanize_ms=20, seed=2, groove="pads")
+        seq1 = build_arrangement_sequence(plan1)
+        seq2 = build_arrangement_sequence(plan2)
+        # At least some event timings should differ.
+        delays1 = [e["delay_ms"] for e in seq1["events"]]
+        delays2 = [e["delay_ms"] for e in seq2["events"]]
+        assert delays1 != delays2
+
+    def test_humanize_bounded_jitter(self):
+        plan_base = _make_plan(groove="pads")
+        seq_base = build_arrangement_sequence(plan_base)
+        base_delays = {i: e["delay_ms"] for i, e in enumerate(seq_base["events"])}
+
+        plan_h = _make_expression_plan(humanize_ms=15, seed=7, groove="pads")
+        seq_h = build_arrangement_sequence(plan_h)
+        beat_ms = 500  # 120 BPM
+        ci_end = round(4 * beat_ms)
+
+        for i, e in enumerate(seq_h["events"]):
+            if base_delays[i] < ci_end:
+                # Count-in should be unchanged.
+                assert e["delay_ms"] == base_delays[i]
+            else:
+                assert abs(e["delay_ms"] - base_delays[i]) <= 15
+
+    def test_velocity_variance_in_range(self):
+        plan = _make_expression_plan(velocity_variance=10, seed=5, groove="pads")
+        seq = build_arrangement_sequence(plan)
+        for e in seq["events"]:
+            if "velocity" in e:
+                assert 1 <= e["velocity"] <= 127
+
+    def test_count_in_not_affected(self):
+        plan = _make_expression_plan(humanize_ms=20, velocity_variance=10, seed=3, groove="pads")
+        seq = build_arrangement_sequence(plan)
+        beat_ms = 500
+        count_in = [e for e in seq["events"] if e["kind"] == "note" and e["channel"] == 0 and e["delay_ms"] < round(4 * beat_ms)]
+        # Count-in clicks should retain exact timing and velocity.
+        for i, e in enumerate(count_in[:4]):
+            assert e["delay_ms"] == round(i * beat_ms)
+            expected_vel = 118 if i == 3 else 92
+            assert e["velocity"] == expected_vel
+
+    def test_swing_shifts_offbeat(self):
+        # Use a chord_pattern with a hit at beat 0.5 (off-beat eighth).
+        plan = _make_expression_plan(swing=0.5, seed=1, tempo=120, count_in_beats=4, groove="pads")
+        plan["groove"]["chord_pattern"] = [
+            {"beat": 0.0, "velocity_scale": 1.0},
+            {"beat": 0.5, "velocity_scale": 0.8},
+        ]
+        seq = build_arrangement_sequence(plan)
+        beat_ms = 500
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        # The off-beat hit should be shifted forward.
+        # Unswung position: (4 + 0.5) * 500 = 2250ms.
+        # Swing offset: 0.5 * (500 / 3) ≈ 83ms.
+        offbeat = chords[1]
+        unswung_ms = round(4.5 * beat_ms)
+        swing_offset = round(0.5 * (beat_ms / 3.0))
+        assert offbeat["delay_ms"] == unswung_ms + swing_offset

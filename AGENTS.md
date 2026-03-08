@@ -72,10 +72,13 @@ voicing.py    - chord voicing: note value lookup, chord/NNS root resolution,
 |               pitch-class derivation, MIDI voicing, and bass voicing
 v
 sequence.py   - converts a plan dict into a flat timed event list
-|               (count-in, chord, and bass events) for AudioService or MIDI export
+|               (count-in, chord, and bass events) for AudioService or MIDI export;
+|               consumes chord_pattern for multi-hit grooves; applies swing,
+|               humanize, and velocity variance via deterministic post-processing
 v
 midi_export.py - zero-dependency Standard MIDI File writer; converts event list
-|                to Type 1 SMF with tempo and note tracks
+|                to Type 1 SMF with stem-separated tracks (chord, bass, count-in),
+|                GM program changes, and time signature meta-events
 v
 audio/*       - optional HQ audio runtime/install, scheduling, and playback service
 ```
@@ -132,7 +135,7 @@ Separators (` - `, ` | `, `,`, whitespace) are preserved verbatim in output. Tok
 | `test_audio_installer.py`   | Runtime/SoundFont installer behaviour                                            |
 | `test_audio_scheduler.py`   | Timed scheduling primitives for playback                                         |
 | `test_voicing.py`           | Chord voicing parity with JS: note values, pitch classes, MIDI voicing, bass     |
-| `test_sequence.py`          | Plan-to-event-list: count-in, chord, bass patterns, timing, NNS input           |
-| `test_midi_export.py`       | MIDI file structure, VLQ encoding, note events, file export, count-in flag       |
+| `test_sequence.py`          | Plan-to-event-list: count-in, chord, bass patterns, timing, NNS input, chord_pattern consumption, expression (swing/humanize/velocity variance) |
+| `test_midi_export.py`       | MIDI file structure, VLQ encoding, note events, file export, count-in flag, stem track separation, program changes, time signature meta |
 
 Golden tests in `test_conversion_golden.py` are the primary regression guard - update them when intentionally changing output.
