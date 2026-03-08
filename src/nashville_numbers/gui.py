@@ -1385,6 +1385,73 @@ _HTML = r"""<!DOCTYPE html>
     color: var(--text);
   }
 
+  /* ── Scale info tooltip ──────────────────────────────────────────────────── */
+  .scale-tip-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .scale-tip-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    cursor: pointer;
+    padding: 0 0.15rem;
+    line-height: 1;
+    font-family: inherit;
+    opacity: 0.7;
+    transition: opacity var(--transition);
+  }
+
+  .scale-tip-btn:hover, .scale-tip-btn:focus { opacity: 1; outline: none; }
+
+  .scale-tip-popup {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 7px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface2);
+    border: 1px solid rgba(212,145,92,0.35);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.7rem;
+    z-index: 200;
+    min-width: 230px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+    pointer-events: none;
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    line-height: 1.7;
+    white-space: pre;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .scale-tip-wrap:hover .scale-tip-popup,
+  .scale-tip-wrap:focus-within .scale-tip-popup { display: flex; }
+
+  .stt-name {
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.15rem;
+    white-space: normal;
+  }
+
+  .stt-name em { color: var(--text-muted); font-style: normal; font-weight: 400; }
+
+  .stt-row {
+    color: var(--text-muted);
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .stt-row b { color: var(--text); font-weight: 600; flex-shrink: 0; }
+
   .acc-btn {
     background: transparent;
     border: 1px solid var(--border);
@@ -2088,11 +2155,19 @@ _HTML = r"""<!DOCTYPE html>
             <option>Bb</option><option>B</option>
           </select>
           <select id="keyQuality" class="key-select" aria-label="Key scale type" onchange="onKeyQualityChange()">
-            <option>Major</option><option>Minor</option>
-            <option>Dorian</option><option>Mixolydian</option>
-            <option>Phrygian</option><option>Lydian</option>
-            <option>Harmonic Minor</option>
+            <option title="Degrees: 1 2 3 4 5 6 7 | W W H W W W H">Major</option>
+            <option title="Degrees: 1 2 ♭3 4 5 ♭6 ♭7 | W H W W H W W">Minor</option>
+            <option title="Degrees: 1 2 ♭3 4 5 6 ♭7 | W H W W W H W">Dorian</option>
+            <option title="Degrees: 1 2 3 4 5 6 ♭7 | W W H W W H W">Mixolydian</option>
+            <option title="Degrees: 1 ♭2 ♭3 4 5 ♭6 ♭7 | H W W W H W W">Phrygian</option>
+            <option title="Degrees: 1 2 3 ♯4 5 6 7 | W W W H W W H">Lydian</option>
+            <option title="Degrees: 1 2 ♭3 4 5 ♭6 7 | W H W W H A H">Harmonic Minor</option>
           </select>
+          <span class="scale-tip-wrap">
+            <button type="button" class="scale-tip-btn" tabindex="0"
+              aria-label="Scale interval information">&#x24D8;</button>
+            <span class="scale-tip-popup" id="scaleTipPopup" role="tooltip"></span>
+          </span>
           <button type="button" id="scaleLockBtn" class="scale-lock-btn active"
             onclick="toggleScaleLock()" aria-pressed="true"
             title="Diatonic Lock — auto-assign chord quality from scale">&#9654; Diatonic</button>
@@ -3750,6 +3825,30 @@ const DIATONIC_QUALITIES = {
   'Harmonic Minor': ['m', 'dim', 'aug', 'm', '', '', 'dim'],
 };
 
+// The actual NNS degree TOKEN emitted per scale position (may include b/# prefix).
+// Fixes edge case: modal/minor scales use altered degrees (b3, b6, b7, b2, #4)
+// that must be explicit in NNS notation, not just the bare digit.
+const DIATONIC_NNS_DEGREES = {
+  'Major':          ['1',  '2',  '3',  '4',  '5',  '6',  '7'],
+  'Minor':          ['1',  '2',  'b3', '4',  '5',  'b6', 'b7'],
+  'Dorian':         ['1',  '2',  'b3', '4',  '5',  '6',  'b7'],
+  'Mixolydian':     ['1',  '2',  '3',  '4',  '5',  '6',  'b7'],
+  'Phrygian':       ['1',  'b2', 'b3', '4',  '5',  'b6', 'b7'],
+  'Lydian':         ['1',  '2',  '3',  '#4', '5',  '6',  '7'],
+  'Harmonic Minor': ['1',  '2',  'b3', '4',  '5',  'b6', '7'],
+};
+
+// Scale tooltip info: alias, W/H step pattern, degree formula, chord qualities.
+const SCALE_INFO = {
+  'Major':          { alias: 'Ionian',         pattern: 'W W H W W W H', degrees: '1  2  3  4  5  6  7',  chords: 'I  ii  iii IV  V  vi  vii°' },
+  'Minor':          { alias: 'Aeolian',        pattern: 'W H W W H W W', degrees: '1  2  ♭3 4  5  ♭6 ♭7', chords: 'i  ii° III iv  v  VI  VII' },
+  'Dorian':         { alias: 'Dorian mode',    pattern: 'W H W W W H W', degrees: '1  2  ♭3 4  5  6  ♭7', chords: 'i  ii  III IV  v  vi° VII' },
+  'Mixolydian':     { alias: 'Mixolydian',     pattern: 'W W H W W H W', degrees: '1  2  3  4  5  6  ♭7', chords: 'I  ii  iii°IV  v  vi  VII' },
+  'Phrygian':       { alias: 'Phrygian mode',  pattern: 'H W W W H W W', degrees: '1  ♭2 ♭3 4  5  ♭6 ♭7', chords: 'i  II  III iv  v° VI  vii' },
+  'Lydian':         { alias: 'Lydian mode',    pattern: 'W W W H W W H', degrees: '1  2  3  ♯4 5  6  7',  chords: 'I  II  iii ♯iv°V  vi  vii' },
+  'Harmonic Minor': { alias: 'Harm. Minor',    pattern: 'W H W W H A H', degrees: '1  2  ♭3 4  5  ♭6 7',  chords: 'i  ii° ♭III iv  V  VI  vii°' },
+};
+
 const DIATONIC_HINT_LABELS = {
   '': 'maj', 'm': 'min', 'dim': 'dim', 'aug': 'aug',
   '(7)': 'dom7', 'm7': 'min7', 'maj7': 'maj7',
@@ -3840,17 +3939,29 @@ function initBuilder() {
     btn.appendChild(hintSpan);
 
     btn.addEventListener('click', () => {
-      stagedNote = nnsAccidental + n;
       if (scaleLockEnabled) {
         const scaleName = document.getElementById('keyQuality').value;
-        const qualities = DIATONIC_QUALITIES[scaleName] || DIATONIC_QUALITIES['Major'];
+        const degrees  = DIATONIC_NNS_DEGREES[scaleName] || DIATONIC_NNS_DEGREES['Major'];
+        const qualities = DIATONIC_QUALITIES[scaleName]  || DIATONIC_QUALITIES['Major'];
+        stagedNote = degrees[n - 1];   // e.g. "b3", "#4", or plain "1"
         const q = qualities[n - 1];
         stagedQuality = q;
+        // Sync quality palette
         document.querySelectorAll('#nnsQualityPalette .quality-btn').forEach(b => {
           const isMatch = b.dataset.suffix === q;
           b.classList.toggle('active', isMatch);
           b.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
         });
+        // Sync accidental column to reflect the degree we locked in
+        const lockedAcc = stagedNote.startsWith('b') ? 'b' : stagedNote.startsWith('#') ? '#' : '';
+        nnsAccidental = lockedAcc;
+        document.querySelectorAll('.acc-btn').forEach(b => {
+          const match = b.dataset.acc === lockedAcc;
+          b.classList.toggle('selected', match);
+          b.setAttribute('aria-pressed', match ? 'true' : 'false');
+        });
+      } else {
+        stagedNote = nnsAccidental + n;
       }
       commitStaged();
     });
@@ -3869,6 +3980,7 @@ function initBuilder() {
   });
 
   updateDiatonicHints();
+  updateScaleTooltip();
 }
 
 function buildQualityPalette(id, qualities, handler) {
@@ -3895,20 +4007,38 @@ function toggleScaleLock() {
 
 function onKeyQualityChange() {
   updateDiatonicHints();
+  updateScaleTooltip();
 }
 
 function updateDiatonicHints() {
   const scaleName = document.getElementById('keyQuality').value;
   const qualities = DIATONIC_QUALITIES[scaleName] || DIATONIC_QUALITIES['Major'];
+  const degrees   = DIATONIC_NNS_DEGREES[scaleName] || DIATONIC_NNS_DEGREES['Major'];
   document.querySelectorAll('.num-btn-hint').forEach(span => {
-    const deg = parseInt(span.dataset.forDegree);
-    if (scaleLockEnabled && deg >= 1 && deg <= 7) {
-      const q = qualities[deg - 1];
-      span.textContent = DIATONIC_HINT_LABELS[q] !== undefined ? DIATONIC_HINT_LABELS[q] : 'maj';
+    const pos = parseInt(span.dataset.forDegree);
+    if (scaleLockEnabled && pos >= 1 && pos <= 7) {
+      const q   = qualities[pos - 1];
+      const deg = degrees[pos - 1];  // e.g. "b3", "#4", "1"
+      // Show ♭/♯ prefix when the scale step is an altered degree
+      const acc = deg.startsWith('b') ? '\u266d' : deg.startsWith('#') ? '\u266f' : '';
+      const ql  = DIATONIC_HINT_LABELS[q] !== undefined ? DIATONIC_HINT_LABELS[q] : 'maj';
+      span.textContent = acc + ql;
     } else {
       span.textContent = '';
     }
   });
+}
+
+function updateScaleTooltip() {
+  const scaleName = document.getElementById('keyQuality').value;
+  const info = SCALE_INFO[scaleName];
+  const pop = document.getElementById('scaleTipPopup');
+  if (!pop || !info) return;
+  pop.innerHTML =
+    '<span class="stt-name">' + scaleName + ' <em>(' + info.alias + ')</em></span>' +
+    '<span class="stt-row"><b>Steps&nbsp;</b>' + info.pattern + '</span>' +
+    '<span class="stt-row"><b>Degrees</b> ' + info.degrees + '</span>' +
+    '<span class="stt-row"><b>Chords&nbsp;</b>' + info.chords + '</span>';
 }
 
 function switchInputTab(tab) {
