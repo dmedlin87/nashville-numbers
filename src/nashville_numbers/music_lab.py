@@ -17,6 +17,14 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "strum_ms": 24,
         "gate": 0.86,
         "bass_pattern": "downbeat-octave",
+        "chord_pattern": [{"beat": 0.0, "velocity_scale": 1.0}],
+        "bass_hits": [
+            {"beat": 0.0, "velocity": 86, "octave_offset": 0},
+            {"beat_fraction": 0.5, "velocity": 78, "octave_offset": 1, "min_slot_beats": 2},
+        ],
+        "swing": 0.0,
+        "humanize_ms": 0,
+        "velocity_variance": 0,
     },
     "pulse": {
         "id": "pulse",
@@ -26,6 +34,13 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "strum_ms": 0,
         "gate": 0.66,
         "bass_pattern": "slot-roots",
+        "chord_pattern": [{"beat": 0.0, "velocity_scale": 1.0}],
+        "bass_hits": [
+            {"beat": 0.0, "velocity": 86, "octave_offset": 0},
+        ],
+        "swing": 0.0,
+        "humanize_ms": 0,
+        "velocity_variance": 0,
     },
     "lantern": {
         "id": "lantern",
@@ -35,6 +50,13 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "strum_ms": 16,
         "gate": 0.52,
         "bass_pattern": "half-time",
+        "chord_pattern": [{"beat": 0.0, "velocity_scale": 1.0}],
+        "bass_hits": [
+            {"beat": 0.0, "velocity": 86, "octave_offset": 0, "bar_downbeat_only": True},
+        ],
+        "swing": 0.0,
+        "humanize_ms": 0,
+        "velocity_variance": 0,
     },
     "pads": {
         "id": "pads",
@@ -44,8 +66,39 @@ GROOVE_PRESETS: dict[str, dict[str, Any]] = {
         "strum_ms": 0,
         "gate": 1.0,
         "bass_pattern": "bar-root",
+        "chord_pattern": [{"beat": 0.0, "velocity_scale": 1.0}],
+        "bass_hits": [
+            {"beat": 0.0, "velocity": 86, "octave_offset": 0, "bar_downbeat_only": True},
+        ],
+        "swing": 0.0,
+        "humanize_ms": 0,
+        "velocity_variance": 0,
     },
 }
+
+# Required fields for a valid groove dict.
+_GROOVE_REQUIRED = {"id", "chord_style", "strum_ms", "gate", "bass_pattern"}
+
+
+def resolve_groove(groove: str | dict[str, Any]) -> dict[str, Any]:
+    """Resolve a groove from its preset ID or validate a custom groove dict.
+
+    Returns a normalized groove dict with all required fields present.
+    """
+    if isinstance(groove, str):
+        key = groove.strip().lower() or "anthem"
+        if key not in GROOVE_PRESETS:
+            raise ValueError(f"Unknown groove '{groove}'")
+        return dict(GROOVE_PRESETS[key])
+
+    if not isinstance(groove, dict):
+        raise TypeError(f"groove must be a str or dict, got {type(groove).__name__}")
+
+    missing = _GROOVE_REQUIRED - set(groove)
+    if missing:
+        raise ValueError(f"Custom groove missing required fields: {sorted(missing)}")
+
+    return dict(groove)
 
 
 def build_progression_plan(

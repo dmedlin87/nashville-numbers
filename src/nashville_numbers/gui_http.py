@@ -39,6 +39,7 @@ def build_handler(
     protected_post_paths = {
         "/convert",
         "/arrangement/plan",
+        "/arrangement/export-midi",
         "/audio/install-default",
         "/audio/play-note",
         "/audio/note-on",
@@ -82,6 +83,9 @@ def build_handler(
             if parsed.path == "/arrangement/plan":
                 self._handle_arrangement_plan()
                 return
+            if parsed.path == "/arrangement/export-midi":
+                self._handle_arrangement_export_midi()
+                return
             if parsed.path == "/audio/install-default":
                 self._handle_audio_install_default()
                 return
@@ -123,6 +127,24 @@ def build_handler(
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def _send_binary(
+            self,
+            data: bytes,
+            *,
+            content_type: str,
+            filename: str | None = None,
+            status: int = 200,
+        ) -> None:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            if filename:
+                self.send_header(
+                    "Content-Disposition", f'attachment; filename="{filename}"'
+                )
             self.end_headers()
             self.wfile.write(data)
 
@@ -273,6 +295,47 @@ def build_handler(
                 except Exception as exc:
                     self._send_json(
                         {"error": f"Failed to build arrangement: {exc}", "reason": "plan_failed"},
+                        status=500,
+                    )
+
+        def _handle_arrangement_export_midi(self) -> None:
+            from .midi_export import export_midi_bytes
+
+            payload = self._read_json_payload()
+            if payload is None:
+                return
+            with self._limited(conversion_semaphore) as allowed:
+                if not allowed:
+                    return
+                try:
+                    input_text = str(payload.get("input", "")).strip()
+                    if not input_text:
+                        self._send_json({"error": "Empty input"})
+                        return
+                    tempo = self._int_field(payload, "tempo", minimum=40, maximum=220, default=96)
+                    meter = self._int_field(payload, "meter", minimum=2, maximum=12, default=4)
+                    count_in = self._int_field(payload, "count_in_beats", minimum=0, maximum=16, default=4)
+                    groove = str(payload.get("groove", "anthem")).strip().lower() or "anthem"
+                    bass_enabled = self._bool_field(payload, "bass_enabled", default=True)
+                    plan = plan_arrangement(
+                        input_text,
+                        tempo=tempo,
+                        meter=meter,
+                        groove=groove,
+                        count_in_beats=count_in,
+                        bass_enabled=bass_enabled,
+                    )
+                    midi_bytes = export_midi_bytes(plan)
+                    self._send_binary(
+                        midi_bytes,
+                        content_type="audio/midi",
+                        filename="arrangement.mid",
+                    )
+                except ValueError as exc:
+                    self._send_json({"error": str(exc), "reason": "validation"}, status=400)
+                except Exception as exc:
+                    self._send_json(
+                        {"error": f"MIDI export failed: {exc}", "reason": "export_failed"},
                         status=500,
                     )
 

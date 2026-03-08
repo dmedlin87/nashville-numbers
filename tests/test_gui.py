@@ -849,3 +849,53 @@ def test_main_falls_back_to_browser_when_webview_runtime_fails(
     out = capsys.readouterr().out
     assert "Failed to start native window: boom. Falling back to default browser." in out
     assert opened_urls == [f"http://127.0.0.1:{port}"]
+
+
+# ---------------------------------------------------------------------------
+# Arrangement export-midi endpoint
+# ---------------------------------------------------------------------------
+
+
+def _post_raw(
+    port: int, path: str, payload: Any, *, authenticated: bool = True
+) -> tuple[int, dict[str, str], bytes]:
+    """POST JSON and return the raw response body as bytes (not parsed as JSON)."""
+    body = json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if authenticated:
+        _AUTH_PORT["port"] = port
+        headers = _auth_headers(headers)
+    conn = HTTPConnection("127.0.0.1", port, timeout=3)
+    try:
+        conn.request("POST", path, body=body, headers=headers)
+        response = conn.getresponse()
+        raw = response.read()
+        return response.status, {k.lower(): v for k, v in response.getheaders()}, raw
+    finally:
+        conn.close()
+
+
+def test_post_arrangement_export_midi_returns_midi_file(gui_server: int) -> None:
+    payload = {"input": "C - Am - F - G", "tempo": 120, "groove": "anthem"}
+    status, headers, body = _post_raw(gui_server, "/arrangement/export-midi", payload)
+    assert status == 200
+    assert headers["content-type"] == "audio/midi"
+    assert "arrangement.mid" in headers.get("content-disposition", "")
+    assert body[:4] == b"MThd"
+    assert len(body) > 50
+
+
+def test_post_arrangement_export_midi_empty_input(gui_server: int) -> None:
+    payload = {"input": ""}
+    status, _, body = _post_raw(gui_server, "/arrangement/export-midi", payload)
+    data = json.loads(body)
+    assert "error" in data
+
+
+def test_post_arrangement_export_midi_requires_session(gui_server: int) -> None:
+    status, _, body = _post_raw(
+        gui_server, "/arrangement/export-midi", {"input": "C - F - G"}, authenticated=False
+    )
+    data = json.loads(body)
+    assert status == 403
+    assert data.get("error") == "Forbidden"

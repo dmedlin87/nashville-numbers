@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from nashville_numbers.music_lab import build_progression_plan
+from nashville_numbers.music_lab import build_progression_plan, resolve_groove, GROOVE_PRESETS
 
 
 def test_build_progression_plan_infers_key_and_assigns_one_bar_per_chord() -> None:
@@ -38,3 +38,70 @@ def test_build_progression_plan_converts_nns_input_when_key_is_present() -> None
 def test_build_progression_plan_requires_key_for_nns_input() -> None:
     with pytest.raises(ValueError, match="Key: REQUIRED"):
         build_progression_plan("1 - 4 - 5")
+
+
+# ---------------------------------------------------------------------------
+# resolve_groove
+# ---------------------------------------------------------------------------
+
+
+class TestResolveGroove:
+    def test_resolve_by_id(self):
+        g = resolve_groove("anthem")
+        assert g["id"] == "anthem"
+        assert g["chord_style"] == "strum"
+
+    def test_resolve_case_insensitive(self):
+        g = resolve_groove("PULSE")
+        assert g["id"] == "pulse"
+
+    def test_unknown_id_raises(self):
+        with pytest.raises(ValueError, match="Unknown groove"):
+            resolve_groove("nonexistent")
+
+    def test_custom_dict(self):
+        custom = {
+            "id": "custom",
+            "chord_style": "block",
+            "strum_ms": 0,
+            "gate": 0.5,
+            "bass_pattern": "slot-roots",
+        }
+        g = resolve_groove(custom)
+        assert g["id"] == "custom"
+
+    def test_custom_dict_missing_field(self):
+        with pytest.raises(ValueError, match="missing required"):
+            resolve_groove({"id": "bad"})
+
+    def test_bad_type_raises(self):
+        with pytest.raises(TypeError):
+            resolve_groove(42)  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Groove preset expansion
+# ---------------------------------------------------------------------------
+
+
+class TestGroovePresetExpansion:
+    def test_all_presets_have_explicit_pattern_fields(self):
+        for key, preset in GROOVE_PRESETS.items():
+            assert "chord_pattern" in preset, f"{key} missing chord_pattern"
+            assert "bass_hits" in preset, f"{key} missing bass_hits"
+            assert "swing" in preset, f"{key} missing swing"
+            assert "humanize_ms" in preset, f"{key} missing humanize_ms"
+            assert "velocity_variance" in preset, f"{key} missing velocity_variance"
+
+    def test_defaults_are_zeroed(self):
+        for key, preset in GROOVE_PRESETS.items():
+            assert preset["swing"] == 0.0, f"{key} swing not zeroed"
+            assert preset["humanize_ms"] == 0, f"{key} humanize_ms not zeroed"
+            assert preset["velocity_variance"] == 0, f"{key} velocity_variance not zeroed"
+
+    def test_plan_includes_expanded_groove(self):
+        plan = build_progression_plan("C - F - G", groove="anthem")
+        g = plan["groove"]
+        assert "bass_hits" in g
+        assert "chord_pattern" in g
+        assert g["swing"] == 0.0

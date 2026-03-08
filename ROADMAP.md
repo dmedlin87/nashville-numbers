@@ -4,18 +4,21 @@ This file is the canonical project roadmap.
 
 ## Status
 
-Current active work is the first music-lab transport slice from `NAM_MUSIC_EXPANSION_IDEA.md`: turn converted charts into a structured arrangement lane with groove presets, timeline playback, and reusable planning data for later live-input, NAM, and export work.
+Current active work: Phase 1 of the Music Lab expansion is complete. The arrangement planner now drives a full MIDI export pipeline with Python-side chord voicing, sequence generation, and a zero-dependency MIDI file writer. Groove presets carry explicit pattern fields for future variation work.
 
 ## Current Track
 
 ### In Progress
 
-- Land the first arrangement planner and transport UI inside the existing embedded GUI.
-- Keep the current converter, fretboard, and audio fallback behavior intact while exposing a stronger playback surface.
-- Reuse the current audio stack before introducing separate NAM/live-input integration work.
+- Stabilize Phase 1 and identify Phase 2 entry points for tone-aware layers.
 
 ### Just Landed
 
+- Ported JS chord voicing to Python (`voicing.py`): note value lookup, chord/NNS root resolution, pitch-class derivation, MIDI voicing (C3 base), slash-chord bass voicing.
+- Added Python-side plan-to-event-list conversion (`sequence.py`): count-in, chord, and bass events matching the existing `AudioService.play_sequence` contract.
+- Built a zero-dependency Standard MIDI File writer (`midi_export.py`): Type 1 SMF with tempo track and note track, ms-to-tick conversion, strum/block voicing in MIDI output.
+- Expanded groove presets with explicit `bass_hits`, `chord_pattern`, `swing`, `humanize_ms`, and `velocity_variance` fields. Added `resolve_groove()` for custom groove validation.
+- Wired `POST /arrangement/export-midi` endpoint and GUI Export MIDI button that triggers a browser download.
 - Added a progression planner module for sections, bars, harmonic slots, and timing metadata.
 - Added sequence playback support so the GUI can queue an entire loop through the existing audio service.
 - Expanded the embedded GUI with a new Music Lab panel, groove presets, timeline interaction, and transport controls.
@@ -38,28 +41,22 @@ Current active work is the first music-lab transport slice from `NAM_MUSIC_EXPAN
 ### Current Safety Baseline
 
 - Worktree-local test command: `PYTHONPATH=src python -m pytest -q`
-- Latest verified result during this track: `160 passed, 1 skipped`
+- Latest verified result during this track: `289 passed, 1 skipped`
 
 ## Next Steps
-
-### Phase 1: Tighten the Music Lab Contract
-
-- Add arrangement export primitives so the same planner can drive MIDI/stem hand-off workflows.
-- Expand groove logic beyond fixed presets into more explicit pattern generation and variation controls.
-- Keep the transport contract stable while deciding where live-input monitoring should attach.
-
-Why this is next:
-- It makes the current bar map useful even before NAM or live-input work starts.
-- It preserves the low-risk foundation already built around GUI/runtime seams.
 
 ### Phase 2: Add Tone-Aware Input and Output Layers
 
 - Add live-input experiments on top of the transport and fretboard targets.
 - Explore NAM/IR insertion where believable source audio exists.
 - Keep the transport planner independent from the eventual tone engine.
+- Apply swing/humanize/velocity variance in the sequence builder.
+- Add pattern generation algorithms for groove creation.
+- Expand MIDI export with stem-separated tracks and GM program changes.
 
 Why this matters:
 - The hard part of the broader idea is not chart parsing; it is source realism, routing, and UX layering around playback.
+- The Phase 1 export primitives and enriched groove model now provide a stable foundation.
 
 ### Explicitly Deferred
 

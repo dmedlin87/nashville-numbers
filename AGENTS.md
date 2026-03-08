@@ -62,10 +62,20 @@ gui.py        - owns GuiApp lifecycle, embedded HTML, pywebview/browser startup,
 |               lazy handler creation, and runtime-install job state
 v
 gui_http.py   - serves GET /, GET /audio/* status, POST /convert,
-|               POST /arrangement/plan, and POST /audio/* JSON endpoints
+|               POST /arrangement/plan, POST /arrangement/export-midi,
+|               and POST /audio/* JSON endpoints
 v
 music_lab.py  - converts/infer keys into arrangement sections, bars, slots,
-|               groove presets, and transport metadata
+|               groove presets (with explicit pattern fields), and transport metadata
+v
+voicing.py    - chord voicing: note value lookup, chord/NNS root resolution,
+|               pitch-class derivation, MIDI voicing, and bass voicing
+v
+sequence.py   - converts a plan dict into a flat timed event list
+|               (count-in, chord, and bass events) for AudioService or MIDI export
+v
+midi_export.py - zero-dependency Standard MIDI File writer; converts event list
+|                to Type 1 SMF with tempo and note tracks
 v
 audio/*       - optional HQ audio runtime/install, scheduling, and playback service
 ```
@@ -84,7 +94,7 @@ When no key is given for chords->NNS, the converter returns up to 3 key interpre
 
 ### GUI (`gui.py`)
 
-The entire front-end is a single embedded HTML string (`_HTML`) - no separate asset files. `GuiApp` owns the HTTP server lifecycle, lazy handler construction, runtime-install job state, and native-window/browser fallback behavior. Request handling lives in `gui_http.py`, which serves `GET /`, `GET /audio/status`, `GET /audio/install-runtime/status`, `POST /convert`, `POST /arrangement/plan`, and several `POST /audio/*` playback/install endpoints. `music_lab.py` builds the arrangement timeline payload used by the Music Lab transport UI. The server enforces `MAX_INPUT_LENGTH = 1_000_000` and validates the JSON payload is a dict before accessing fields.
+The entire front-end is a single embedded HTML string (`_HTML`) - no separate asset files. `GuiApp` owns the HTTP server lifecycle, lazy handler construction, runtime-install job state, and native-window/browser fallback behavior. Request handling lives in `gui_http.py`, which serves `GET /`, `GET /audio/status`, `GET /audio/install-runtime/status`, `POST /convert`, `POST /arrangement/plan`, `POST /arrangement/export-midi`, and several `POST /audio/*` playback/install endpoints. `music_lab.py` builds the arrangement timeline payload used by the Music Lab transport UI. The server enforces `MAX_INPUT_LENGTH = 1_000_000` and validates the JSON payload is a dict before accessing fields.
 
 ## Output Contract
 
@@ -115,11 +125,14 @@ Separators (` - `, ` | `, `,`, whitespace) are preserved verbatim in output. Tok
 | `test_security.py`          | ReDoS safety: both parser regexes must complete in < 100ms on 5000-char payloads |
 | `test_spelling.py`          | Output format consistency                                                        |
 | `test_cli.py`               | CLI behaviour                                                                    |
-| `test_gui.py`               | GUI HTTP endpoints, runtime install job flow, and window/browser fallback        |
-| `test_music_lab.py`         | Arrangement planning, bar shaping, and NNS/chord transport metadata              |
+| `test_gui.py`               | GUI HTTP endpoints, MIDI export, runtime install job flow, and window/browser fallback |
+| `test_music_lab.py`         | Arrangement planning, bar shaping, groove expansion, and NNS/chord transport metadata  |
 | `test_audio_service.py`     | `AudioService` orchestration, scheduler interaction, and install flows           |
 | `test_audio_engine.py`      | Audio engine wrapper behaviour                                                   |
 | `test_audio_installer.py`   | Runtime/SoundFont installer behaviour                                            |
 | `test_audio_scheduler.py`   | Timed scheduling primitives for playback                                         |
+| `test_voicing.py`           | Chord voicing parity with JS: note values, pitch classes, MIDI voicing, bass     |
+| `test_sequence.py`          | Plan-to-event-list: count-in, chord, bass patterns, timing, NNS input           |
+| `test_midi_export.py`       | MIDI file structure, VLQ encoding, note events, file export, count-in flag       |
 
 Golden tests in `test_conversion_golden.py` are the primary regression guard - update them when intentionally changing output.

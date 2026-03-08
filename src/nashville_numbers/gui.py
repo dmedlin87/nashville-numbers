@@ -2202,6 +2202,7 @@ _HTML = r"""<!DOCTYPE html>
             <button class="btn-transport primary" id="arrangementBuildBtn" onclick="buildArrangement()">Build Arrangement</button>
             <button class="btn-transport secondary" id="arrangementPlayBtn" onclick="playArrangement()" disabled>Play Loop</button>
             <button class="btn-transport ghost" id="arrangementStopBtn" onclick="stopArrangement()">Stop</button>
+            <button class="btn-transport secondary" id="arrangementExportBtn" onclick="exportMidi()" disabled>Export MIDI</button>
           </div>
 
           <div class="lab-transport-status" id="labTransportStatus">
@@ -2231,9 +2232,9 @@ _HTML = r"""<!DOCTYPE html>
               <span class="runway-copy">This transport is the place to hang starter tones, user-imported NAM captures, and section-specific tone swaps.</span>
             </div>
             <div class="runway-card">
-              <span class="runway-label">Export <span class="runway-badge">Coming Soon</span></span>
-              <span class="runway-title">Re-Amp Hand-Off</span>
-              <span class="runway-copy">The bar map and groove data are structured so stem export and later re-amp workflows can sit on top without re-parsing the chart.</span>
+              <span class="runway-label">Export</span>
+              <span class="runway-title">MIDI Hand-Off</span>
+              <span class="runway-copy">Export the current arrangement as a Standard MIDI File. Stem export and re-amp workflows are planned for a future update.</span>
             </div>
           </div>
         </div>
@@ -2797,8 +2798,10 @@ function setTransportStatus(message, mode = '') {
 function syncArrangementButtons() {
   const playBtn = document.getElementById('arrangementPlayBtn');
   const stopBtn = document.getElementById('arrangementStopBtn');
+  const exportBtn = document.getElementById('arrangementExportBtn');
   if (playBtn) playBtn.disabled = !musicLabState.plan;
   if (stopBtn) stopBtn.disabled = !musicLabState.isPlaying;
+  if (exportBtn) exportBtn.disabled = !musicLabState.plan;
 }
 
 function refreshMusicLabRuntimeSummary() {
@@ -3343,6 +3346,51 @@ function stopArrangement(options = {}) {
   syncArrangementButtons();
   if (!options.silent) {
     setTransportStatus('Transport stopped.', 'ready');
+  }
+}
+
+async function exportMidi() {
+  const input = getCurrentInputText();
+  if (!input) return;
+  const exportBtn = document.getElementById('arrangementExportBtn');
+  if (exportBtn) exportBtn.disabled = true;
+  setTransportStatus('Exporting MIDI\u2026', 'busy');
+  try {
+    const tempoEl = document.getElementById('labTempo');
+    const meterEl = document.getElementById('labMeter');
+    const countInEl = document.getElementById('labCountIn');
+    const bassEl = document.getElementById('labBassEnabled');
+    const payload = {
+      input,
+      tempo: tempoEl ? parseInt(tempoEl.value) : 96,
+      meter: meterEl ? parseInt(meterEl.value) : 4,
+      count_in_beats: countInEl ? parseInt(countInEl.value) : 4,
+      groove: musicLabState.selectedGroove || 'anthem',
+      bass_enabled: bassEl ? bassEl.checked : true,
+    };
+    const response = await fetch('/arrangement/export-midi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || 'Export failed');
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'arrangement.mid';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setTransportStatus('MIDI exported.', 'ready');
+  } catch (err) {
+    setTransportStatus('Export failed: ' + err.message, 'warn');
+  } finally {
+    syncArrangementButtons();
   }
 }
 
