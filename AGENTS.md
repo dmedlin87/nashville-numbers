@@ -66,15 +66,20 @@ gui_http.py   - serves GET /, GET /audio/* status, POST /convert,
 |               and POST /audio/* JSON endpoints
 v
 music_lab.py  - converts/infer keys into arrangement sections, bars, slots,
-|               groove presets (with explicit pattern fields), and transport metadata
+|               groove presets (9 presets with explicit pattern fields),
+|               voicing_style/voice_leading plan parameters, and transport metadata
 v
 voicing.py    - chord voicing: note value lookup, chord/NNS root resolution,
-|               pitch-class derivation, MIDI voicing, and bass voicing
+|               pitch-class derivation, MIDI voicing (close/drop-2/drop-3),
+|               extended chords (6th, 9th, 11th, 13th, add chords),
+|               voice leading optimizer, and bass voicing
 v
 sequence.py   - converts a plan dict into a flat timed event list
-|               (count-in, chord, and bass events) for AudioService or MIDI export;
-|               consumes chord_pattern for multi-hit grooves; applies swing,
-|               humanize, and velocity variance via deterministic post-processing
+|               (count-in, chord, bass, and arpeggio events) for AudioService
+|               or MIDI export; consumes chord_pattern for multi-hit grooves,
+|               arp_pattern for arpeggiated chords, walking bass for scale walks;
+|               applies swing, humanize, and velocity variance via deterministic
+|               post-processing; supports voicing_style and voice_leading passthrough
 v
 midi_export.py - zero-dependency Standard MIDI File writer; converts event list
 |                to Type 1 SMF with stem-separated tracks (chord, bass, count-in),
@@ -129,13 +134,13 @@ Separators (` - `, ` | `, `,`, whitespace) are preserved verbatim in output. Tok
 | `test_spelling.py`          | Output format consistency                                                        |
 | `test_cli.py`               | CLI behaviour                                                                    |
 | `test_gui.py`               | GUI HTTP endpoints, MIDI export, runtime install job flow, and window/browser fallback |
-| `test_music_lab.py`         | Arrangement planning, bar shaping, groove expansion, and NNS/chord transport metadata  |
+| `test_music_lab.py`         | Arrangement planning, bar shaping, groove expansion (9 presets), voicing plan fields, and NNS/chord transport metadata  |
 | `test_audio_service.py`     | `AudioService` orchestration, scheduler interaction, and install flows           |
 | `test_audio_engine.py`      | Audio engine wrapper behaviour                                                   |
 | `test_audio_installer.py`   | Runtime/SoundFont installer behaviour                                            |
 | `test_audio_scheduler.py`   | Timed scheduling primitives for playback                                         |
-| `test_voicing.py`           | Chord voicing parity with JS: note values, pitch classes, MIDI voicing, bass     |
-| `test_sequence.py`          | Plan-to-event-list: count-in, chord, bass patterns, timing, NNS input, chord_pattern consumption, expression (swing/humanize/velocity variance) |
+| `test_voicing.py`           | Chord voicing: note values, pitch classes, MIDI voicing, bass, extended voicings (6/9/11/13/add), voicing styles (drop-2/drop-3), voice leading |
+| `test_sequence.py`          | Plan-to-event-list: count-in, chord, bass patterns, timing, NNS input, chord_pattern consumption, expression, new grooves (waltz/shuffle/funk/reggae/ballad), arpeggio, walking bass, voice leading |
 | `test_midi_export.py`       | MIDI file structure, VLQ encoding, note events, file export, count-in flag, stem track separation, program changes, time signature meta |
 
 Golden tests in `test_conversion_golden.py` are the primary regression guard - update them when intentionally changing output.

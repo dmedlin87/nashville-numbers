@@ -99,6 +99,11 @@ class TestGroovePresetExpansion:
             "pulse": {"swing": 0.0, "humanize_ms": 4, "velocity_variance": 4},
             "lantern": {"swing": 0.3, "humanize_ms": 6, "velocity_variance": 8},
             "pads": {"swing": 0.0, "humanize_ms": 0, "velocity_variance": 0},
+            "waltz": {"swing": 0.0, "humanize_ms": 6, "velocity_variance": 5},
+            "shuffle": {"swing": 0.5, "humanize_ms": 8, "velocity_variance": 8},
+            "funk": {"swing": 0.15, "humanize_ms": 6, "velocity_variance": 10},
+            "reggae": {"swing": 0.0, "humanize_ms": 4, "velocity_variance": 6},
+            "ballad": {"swing": 0.0, "humanize_ms": 0, "velocity_variance": 0},
         }
         for key, preset in GROOVE_PRESETS.items():
             exp = expected[key]
@@ -125,3 +130,53 @@ class TestGroovePresetExpansion:
             for i, entry in enumerate(preset["chord_pattern"]):
                 assert "beat" in entry, f"{key} chord_pattern[{i}] missing beat"
                 assert "velocity_scale" in entry, f"{key} chord_pattern[{i}] missing velocity_scale"
+
+
+# ---------------------------------------------------------------------------
+# New groove presets
+# ---------------------------------------------------------------------------
+
+
+class TestNewGroovePresets:
+    def test_waltz_preset(self):
+        g = resolve_groove("waltz")
+        assert g["id"] == "waltz"
+        assert len(g["chord_pattern"]) == 3
+
+    def test_shuffle_preset(self):
+        g = resolve_groove("shuffle")
+        assert g["id"] == "shuffle"
+        assert g["swing"] == 0.5
+
+    def test_funk_preset(self):
+        g = resolve_groove("funk")
+        assert g["id"] == "funk"
+        assert g["gate"] == 0.4
+
+    def test_reggae_has_no_downbeat_chord(self):
+        g = resolve_groove("reggae")
+        assert g["id"] == "reggae"
+        beats = [h["beat"] for h in g["chord_pattern"]]
+        assert 0.0 not in beats
+
+    def test_ballad_preset(self):
+        g = resolve_groove("ballad")
+        assert g["id"] == "ballad"
+        assert g["gate"] == 0.95
+
+
+# ---------------------------------------------------------------------------
+# Voice leading plan fields
+# ---------------------------------------------------------------------------
+
+
+class TestVoicingPlanFields:
+    def test_plan_includes_voicing_fields(self):
+        plan = build_progression_plan("C - F - G", voicing_style="drop2", voice_leading=True)
+        assert plan["voicing_style"] == "drop2"
+        assert plan["voice_leading"] is True
+
+    def test_plan_voicing_defaults(self):
+        plan = build_progression_plan("C - F - G")
+        assert plan["voicing_style"] == "close"
+        assert plan["voice_leading"] is False

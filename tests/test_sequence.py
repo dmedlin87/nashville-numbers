@@ -388,3 +388,185 @@ class TestExpression:
         unswung_ms = round(4.5 * beat_ms)
         swing_offset = round(0.5 * (beat_ms / 3.0))
         assert offbeat["delay_ms"] == unswung_ms + swing_offset
+
+
+# ---------------------------------------------------------------------------
+# New groove presets in sequence
+# ---------------------------------------------------------------------------
+
+
+class TestNewGrooveSequences:
+    def test_waltz_chord_count(self):
+        plan = _make_plan(groove="waltz", meter=3)
+        seq = build_arrangement_sequence(plan)
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        # waltz has 3 chord hits per slot, 4 slots = 12.
+        assert len(chords) == 12
+
+    def test_reggae_offbeat_timing(self):
+        plan = _make_plan(groove="reggae", tempo=120, count_in_beats=4)
+        plan["groove"]["humanize_ms"] = 0
+        plan["groove"]["velocity_variance"] = 0
+        plan["groove"]["swing"] = 0.0
+        seq = build_arrangement_sequence(plan)
+        beat_ms = 500
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        # First chord hit at beat 4.5 (after 4-beat count-in, on the "and").
+        assert chords[0]["delay_ms"] == round(4.5 * beat_ms)
+
+    def test_funk_event_count(self):
+        plan = _make_plan(groove="funk")
+        seq = build_arrangement_sequence(plan)
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        # funk has 5 chord hits per slot, 4 slots = 20.
+        assert len(chords) == 20
+
+    def test_ballad_single_hit(self):
+        plan = _make_plan(groove="ballad")
+        seq = build_arrangement_sequence(plan)
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        # ballad has 1 chord hit per slot, 4 slots = 4.
+        assert len(chords) == 4
+
+    def test_shuffle_has_swing(self):
+        plan = _make_plan(groove="shuffle")
+        assert plan["groove"]["swing"] == 0.5
+
+
+# ---------------------------------------------------------------------------
+# Arpeggio pattern
+# ---------------------------------------------------------------------------
+
+
+class TestArpeggio:
+    def test_arp_produces_note_events_not_chord(self):
+        plan = _make_plan(groove="pads")
+        plan["groove"]["arp_pattern"] = {
+            "note_indices": [0, 1, 2, 1],
+            "step_beats": 1.0,
+            "gate": 0.8,
+        }
+        seq = build_arrangement_sequence(plan)
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        beat_ms = 500
+        ci_end = round(4 * beat_ms)
+        arp_notes = [
+            e for e in seq["events"]
+            if e["kind"] == "note" and e["channel"] == 0 and e["delay_ms"] >= ci_end
+        ]
+        assert len(chords) == 0
+        assert len(arp_notes) > 0
+
+    def test_arp_note_count(self):
+        plan = _make_plan(groove="pads", tempo=120, count_in_beats=4)
+        plan["groove"]["arp_pattern"] = {
+            "note_indices": [0, 1, 2, 1],
+            "step_beats": 1.0,
+            "gate": 0.8,
+        }
+        seq = build_arrangement_sequence(plan)
+        beat_ms = 500
+        ci_end = round(4 * beat_ms)
+        arp_notes = [
+            e for e in seq["events"]
+            if e["kind"] == "note" and e["channel"] == 0 and e["delay_ms"] >= ci_end
+        ]
+        # Each slot is 4 beats, step_beats=1.0: 4 arp notes per slot, 4 slots = 16.
+        assert len(arp_notes) == 16
+
+    def test_arp_wraps_note_indices(self):
+        plan = _make_plan(groove="pads")
+        plan["groove"]["arp_pattern"] = {
+            "note_indices": [0, 1, 2, 3, 4],
+            "step_beats": 1.0,
+            "gate": 0.8,
+        }
+        seq = build_arrangement_sequence(plan)
+        assert seq["total_ms"] > 0
+
+    def test_arp_velocity_curve(self):
+        plan = _make_plan(groove="pads", tempo=120, count_in_beats=4)
+        plan["groove"]["humanize_ms"] = 0
+        plan["groove"]["velocity_variance"] = 0
+        plan["groove"]["arp_pattern"] = {
+            "note_indices": [0, 1],
+            "step_beats": 2.0,
+            "gate": 0.8,
+            "velocity_curve": [1.0, 0.5],
+        }
+        seq = build_arrangement_sequence(plan)
+        beat_ms = 500
+        ci_end = round(4 * beat_ms)
+        arp_notes = [
+            e for e in seq["events"]
+            if e["kind"] == "note" and e["channel"] == 0 and e["delay_ms"] >= ci_end
+        ]
+        # First note full velocity, second half.
+        assert arp_notes[0]["velocity"] == 96
+        assert arp_notes[1]["velocity"] == 48
+
+
+# ---------------------------------------------------------------------------
+# Walking bass
+# ---------------------------------------------------------------------------
+
+
+class TestWalkingBass:
+    def test_walking_bass_four_notes_per_slot(self):
+        plan = _make_plan(groove="pads", tempo=120)
+        plan["groove"]["bass_pattern"] = "walking"
+        del plan["groove"]["bass_hits"]
+        seq = build_arrangement_sequence(plan)
+        bass = [e for e in seq["events"] if e["channel"] == 1]
+        # 4 walk notes per slot, 4 slots = 16.
+        assert len(bass) == 16
+
+    def test_walking_bass_in_range(self):
+        plan = _make_plan(groove="pads")
+        plan["groove"]["bass_pattern"] = "walking"
+        del plan["groove"]["bass_hits"]
+        seq = build_arrangement_sequence(plan)
+        bass = [e for e in seq["events"] if e["channel"] == 1]
+        for e in bass:
+            assert 28 <= e["midi"] <= 52
+
+    def test_walking_bass_first_note_is_root(self):
+        plan = _make_plan(input_text="C", groove="pads")
+        plan["groove"]["bass_pattern"] = "walking"
+        del plan["groove"]["bass_hits"]
+        seq = build_arrangement_sequence(plan)
+        bass = [e for e in seq["events"] if e["channel"] == 1]
+        assert bass[0]["midi"] == 36  # C2
+
+
+# ---------------------------------------------------------------------------
+# Voice leading in sequence
+# ---------------------------------------------------------------------------
+
+
+class TestVoiceLeadingSequence:
+    def test_default_no_voice_leading(self):
+        plan1 = _make_plan()
+        plan2 = _make_plan()
+        seq1 = build_arrangement_sequence(plan1)
+        seq2 = build_arrangement_sequence(plan2)
+        assert seq1 == seq2
+
+    def test_voice_leading_changes_midi_notes(self):
+        plan = _make_plan(input_text="C - F - G - C", groove="pads")
+        plan["voice_leading"] = True
+        plan["groove"]["humanize_ms"] = 0
+        plan["groove"]["velocity_variance"] = 0
+        seq = build_arrangement_sequence(plan)
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        # With voice leading, F chord should use an inversion.
+        # Root position F would be [53, 57, 60].
+        f_midis = chords[1]["midis"]
+        assert f_midis != [53, 57, 60]
+
+    def test_drop2_style_in_sequence(self):
+        plan = _make_plan(groove="pads")
+        plan["voicing_style"] = "drop2"
+        seq = build_arrangement_sequence(plan)
+        chords = [e for e in seq["events"] if e["kind"] == "chord"]
+        assert len(chords) == 4

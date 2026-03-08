@@ -59,16 +59,71 @@ def get_chord_root_value(chord_data: dict[str, Any], key: dict[str, str]) -> int
     return get_note_value(chord_data.get("root") or chord_data.get("text", ""))
 
 
+def _is_minor_quality(text: str) -> bool:
+    """Detect minor quality without false-positives on 'maj'."""
+    if "dim" in text:
+        return True
+    if "m" not in text:
+        return False
+    # "mmaj7" has both 'm' and 'maj' — check if 'm' appears before 'maj'
+    m_idx = text.index("m")
+    if "maj" in text:
+        maj_idx = text.index("maj")
+        return m_idx < maj_idx
+    return True
+
+
+def _seventh_interval(text: str, is_dim: bool) -> int | None:
+    """Return the seventh interval (semitones above root), or None."""
+    if "maj7" in text or "mmaj7" in text:
+        return 11
+    if is_dim and "7" in text:
+        return 9  # diminished 7th (double-flat 7th)
+    if "7" in text or "9" in text or "11" in text or "13" in text:
+        return 10 if _is_minor_quality(text) or "maj" not in text else 11
+    return None
+
+
+def _add_extensions(
+    notes: list[int], root_val: int, text: str,
+) -> None:
+    """Append 6th/9th/11th/13th pitch classes based on chord text."""
+    # 6th — add major 6th (+9)
+    if "6" in text and "13" not in text:
+        pc = (root_val + 9) % 12
+        if pc not in notes:
+            notes.append(pc)
+
+    has_add = "add" in text
+
+    # 9th (+2 mod 12)
+    if "9" in text or (not has_add and ("11" in text or "13" in text)):
+        pc = (root_val + 2) % 12
+        if pc not in notes:
+            notes.append(pc)
+
+    # 11th (+5 mod 12) — for add11 or explicit 11
+    if "11" in text:
+        pc = (root_val + 5) % 12
+        if pc not in notes:
+            notes.append(pc)
+
+    # 13th (+9 mod 12) — for add13 or explicit 13
+    if "13" in text:
+        pc = (root_val + 9) % 12
+        if pc not in notes:
+            notes.append(pc)
+
+
 def get_chord_notes(chord_data: dict[str, Any], key: dict[str, str]) -> list[int]:
-    """Pitch classes for the chord: root, 3rd, 5th, optional 7th."""
+    """Pitch classes for the chord: root, 3rd, 5th, optional 7th, extensions."""
     root_val = get_chord_root_value(chord_data, key)
     notes = [root_val]
     text = str(chord_data.get("text", "")).lower()
 
     # Third
-    if "m" in text and "maj" not in text:
-        notes.append((root_val + 3) % 12)
-    elif "dim" in text:
+    is_dim = "dim" in text
+    if _is_minor_quality(text):
         notes.append((root_val + 3) % 12)
     elif "sus4" in text:
         notes.append((root_val + 5) % 12)
@@ -78,7 +133,7 @@ def get_chord_notes(chord_data: dict[str, Any], key: dict[str, str]) -> list[int
         notes.append((root_val + 4) % 12)
 
     # Fifth
-    if "dim" in text or "b5" in text:
+    if is_dim or "b5" in text:
         notes.append((root_val + 6) % 12)
     elif "aug" in text or "+" in text:
         notes.append((root_val + 8) % 12)
@@ -86,18 +141,40 @@ def get_chord_notes(chord_data: dict[str, Any], key: dict[str, str]) -> list[int
         notes.append((root_val + 7) % 12)
 
     # Seventh
-    if "maj7" in text:
-        notes.append((root_val + 11) % 12)
-    elif "7" in text:
-        notes.append((root_val + 10) % 12)
+    has_add = "add" in text
+    seventh = _seventh_interval(text, is_dim)
+    if seventh is not None and not has_add:
+        notes.append((root_val + seventh) % 12)
+
+    # Extensions (6th, 9th, 11th, 13th, add chords)
+    _add_extensions(notes, root_val, text)
 
     return notes
 
 
-def get_chord_midi_notes(chord_data: dict[str, Any], key: dict[str, str]) -> list[int]:
-    """Ascending MIDI note list starting at C3 (48 + root). Max 8 notes."""
+def get_chord_midi_notes(
+    chord_data: dict[str, Any],
+    key: dict[str, str],
+    *,
+    voicing_style: str = "close",
+    prev_midis: list[int] | None = None,
+) -> list[int]:
+    """Ascending MIDI note list starting at C3 (48 + root). Max 8 notes.
+
+    *voicing_style*: ``"close"`` (default), ``"drop2"``, or ``"drop3"``.
+    *prev_midis*: previous chord's MIDI notes for voice-leading optimization.
+    """
     root_val = get_chord_root_value(chord_data, key)
     pcs = get_chord_notes(chord_data, key)
+
+    if prev_midis is not None:
+        return _voice_led_voicing(pcs, root_val, voicing_style, prev_midis)
+
+    return _build_voicing(pcs, root_val, voicing_style)
+
+
+def _build_voicing(pcs: list[int], root_val: int, style: str) -> list[int]:
+    """Build ascending MIDI notes from pitch classes in the given voicing style."""
     base_root = 48 + root_val
     midis: list[int] = []
     previous = base_root - 1
@@ -110,7 +187,85 @@ def get_chord_midi_notes(chord_data: dict[str, Any], key: dict[str, str]) -> lis
             midis.append(midi)
             previous = midi
 
-    return midis[:8]
+    midis = midis[:8]
+    return _apply_drop(midis, style)
+
+
+def _apply_drop(midis: list[int], style: str) -> list[int]:
+    """Apply drop-2 or drop-3 voicing to a sorted note list."""
+    if style == "drop2" and len(midis) >= 3:
+        midis[len(midis) - 2] -= 12
+        midis.sort()
+    elif style == "drop3" and len(midis) >= 4:
+        midis[len(midis) - 3] -= 12
+        midis.sort()
+    return midis
+
+
+def _voice_led_voicing(
+    pcs: list[int],
+    root_val: int,
+    style: str,
+    prev_midis: list[int],
+) -> list[int]:
+    """Find the voicing that minimizes total semitone movement from *prev_midis*."""
+    candidates = _generate_voicing_candidates(pcs, root_val, style)
+    if not candidates:
+        return _build_voicing(pcs, root_val, style)
+    return min(candidates, key=lambda c: _voice_leading_cost(prev_midis, c))
+
+
+def _generate_voicing_candidates(
+    pcs: list[int], root_val: int, style: str,
+) -> list[list[int]]:
+    """Generate all reasonable inversions in the given voicing style."""
+    candidates: list[list[int]] = []
+
+    for rotation in range(len(pcs)):
+        rotated = pcs[rotation:] + pcs[:rotation]
+        voicing = _build_voicing_from_bass(rotated, style)
+        candidates.append(voicing)
+
+    # Octave-shifted variants.
+    for v in list(candidates):
+        up = [n + 12 for n in v]
+        down = [n - 12 for n in v]
+        if all(28 <= n <= 96 for n in up):
+            candidates.append(up)
+        if all(28 <= n <= 96 for n in down):
+            candidates.append(down)
+
+    return candidates
+
+
+def _build_voicing_from_bass(ordered_pcs: list[int], style: str) -> list[int]:
+    """Build MIDI notes where the first pitch class is the lowest voice."""
+    bass_pc = ordered_pcs[0]
+    base = 48 + bass_pc
+    midis = [base]
+
+    for pc in ordered_pcs[1:]:
+        midi = base + ((pc - bass_pc + 12) % 12)
+        while midi <= midis[-1]:
+            midi += 12
+        midis.append(midi)
+
+    midis = midis[:8]
+    return _apply_drop(midis, style)
+
+
+def _voice_leading_cost(prev: list[int], next_: list[int]) -> int:
+    """Total absolute semitone movement between two voicings."""
+    if not prev or not next_:
+        return 0
+    if len(prev) == len(next_):
+        return sum(abs(a - b) for a, b in zip(sorted(prev), sorted(next_)))
+    shorter, longer = (prev, next_) if len(prev) <= len(next_) else (next_, prev)
+    total = 0
+    for note in shorter:
+        closest = min(longer, key=lambda n: abs(n - note))
+        total += abs(note - closest)
+    return total
 
 
 def get_chord_bass_value(chord_data: dict[str, Any], key: dict[str, str]) -> int:

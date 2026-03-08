@@ -180,6 +180,164 @@ class TestGetChordNotes:
 
 
 # ---------------------------------------------------------------------------
+# Extended voicings: 6th, 9th, 11th, 13th, add chords, bug fixes
+# ---------------------------------------------------------------------------
+
+
+class TestExtendedVoicings:
+    """Extended chord voicings: 6th, 9th, 11th, 13th, add chords, and bug fixes."""
+
+    KEY_C = {"tonic": "C", "mode": "Major"}
+
+    # --- Bug fixes ---
+
+    def test_dim7(self):
+        # Bdim7 = B D F Ab = [11, 2, 5, 8] (dim 7th = +9, not +10)
+        data = {"type": "chord", "text": "Bdim7", "root": "B"}
+        assert get_chord_notes(data, self.KEY_C) == [11, 2, 5, 8]
+
+    def test_mmaj7(self):
+        # Cmmaj7 = C Eb G B = [0, 3, 7, 11] (minor 3rd + major 7th)
+        data = {"type": "chord", "text": "Cmmaj7", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 3, 7, 11]
+
+    # --- 6th chords ---
+
+    def test_major_6th(self):
+        # C6 = C E G A = [0, 4, 7, 9]
+        data = {"type": "chord", "text": "C6", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 4, 7, 9]
+
+    def test_minor_6th(self):
+        # Cm6 = C Eb G A = [0, 3, 7, 9]
+        data = {"type": "chord", "text": "Cm6", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 3, 7, 9]
+
+    # --- 9th chords ---
+
+    def test_dom9(self):
+        # C9 = C E G Bb D = [0, 4, 7, 10, 2]
+        data = {"type": "chord", "text": "C9", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 4, 7, 10, 2]
+
+    def test_maj9(self):
+        # Cmaj9 = C E G B D = [0, 4, 7, 11, 2]
+        data = {"type": "chord", "text": "Cmaj9", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 4, 7, 11, 2]
+
+    def test_min9(self):
+        # Cm9 = C Eb G Bb D = [0, 3, 7, 10, 2]
+        data = {"type": "chord", "text": "Cm9", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 3, 7, 10, 2]
+
+    # --- 11th chords ---
+
+    def test_dom11(self):
+        # C11 = C E G Bb D F = [0, 4, 7, 10, 2, 5]
+        data = {"type": "chord", "text": "C11", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 4, 7, 10, 2, 5]
+
+    def test_maj11(self):
+        # Cmaj11 = C E G B D F = [0, 4, 7, 11, 2, 5]
+        data = {"type": "chord", "text": "Cmaj11", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 4, 7, 11, 2, 5]
+
+    def test_min11(self):
+        # Cm11 = C Eb G Bb D F = [0, 3, 7, 10, 2, 5]
+        data = {"type": "chord", "text": "Cm11", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 3, 7, 10, 2, 5]
+
+    # --- 13th chords ---
+
+    def test_dom13(self):
+        # C13 = C E G Bb D A = [0, 4, 7, 10, 2, 9]
+        data = {"type": "chord", "text": "C13", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 4, 7, 10, 2, 9]
+
+    def test_maj13(self):
+        # Cmaj13 = C E G B D A = [0, 4, 7, 11, 2, 9]
+        data = {"type": "chord", "text": "Cmaj13", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 4, 7, 11, 2, 9]
+
+    def test_min13(self):
+        # Cm13 = C Eb G Bb D A = [0, 3, 7, 10, 2, 9]
+        data = {"type": "chord", "text": "Cm13", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 3, 7, 10, 2, 9]
+
+    # --- add chords ---
+
+    def test_add9(self):
+        # Cadd9 = C E G D = [0, 4, 7, 2] (no 7th)
+        data = {"type": "chord", "text": "Cadd9", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 4, 7, 2]
+
+    def test_add11(self):
+        # Cadd11 = C E G F = [0, 4, 7, 5] (no 7th)
+        data = {"type": "chord", "text": "Cadd11", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 4, 7, 5]
+
+    def test_add13(self):
+        # Cadd13 = C E G A = [0, 4, 7, 9] (no 7th)
+        data = {"type": "chord", "text": "Cadd13", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 4, 7, 9]
+
+    # --- existing types still correct ---
+
+    def test_plain_major_unchanged(self):
+        data = {"type": "chord", "text": "C", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 4, 7]
+
+    def test_plain_minor_unchanged(self):
+        data = {"type": "chord", "text": "Am", "root": "A"}
+        assert get_chord_notes(data, self.KEY_C) == [9, 0, 4]
+
+    def test_dom7_unchanged(self):
+        data = {"type": "chord", "text": "G7", "root": "G"}
+        assert get_chord_notes(data, self.KEY_C) == [7, 11, 2, 5]
+
+    def test_maj7_unchanged(self):
+        data = {"type": "chord", "text": "Cmaj7", "root": "C"}
+        assert get_chord_notes(data, self.KEY_C) == [0, 4, 7, 11]
+
+
+class TestExtendedMidiNotes:
+    """MIDI note output for extended chords."""
+
+    KEY_C = {"tonic": "C", "mode": "Major"}
+
+    def test_c9_midi_five_notes_ascending(self):
+        data = {"type": "chord", "text": "C9", "root": "C"}
+        midis = get_chord_midi_notes(data, self.KEY_C)
+        assert midis == sorted(midis)
+        assert len(midis) == 5
+
+    def test_c13_midi_six_notes_within_cap(self):
+        data = {"type": "chord", "text": "C13", "root": "C"}
+        midis = get_chord_midi_notes(data, self.KEY_C)
+        assert midis == sorted(midis)
+        assert len(midis) == 6
+        assert len(midis) <= 8
+
+    def test_dim7_midi_corrected(self):
+        data = {"type": "chord", "text": "Bdim7", "root": "B"}
+        midis = get_chord_midi_notes(data, self.KEY_C)
+        # B3=59, D4=62, F4=65, Ab4=68 (dim7 = +9, not +10)
+        assert midis == [59, 62, 65, 68]
+
+    def test_c11_midi_six_notes(self):
+        data = {"type": "chord", "text": "C11", "root": "C"}
+        midis = get_chord_midi_notes(data, self.KEY_C)
+        assert midis == sorted(midis)
+        assert len(midis) == 6
+
+    def test_add9_midi_four_notes(self):
+        data = {"type": "chord", "text": "Cadd9", "root": "C"}
+        midis = get_chord_midi_notes(data, self.KEY_C)
+        assert midis == sorted(midis)
+        assert len(midis) == 4
+
+
+# ---------------------------------------------------------------------------
 # get_chord_midi_notes
 # ---------------------------------------------------------------------------
 
@@ -264,3 +422,94 @@ class TestBassVoicing:
         midi = get_bass_midi(data, self.KEY_C)
         # B = 11, 36 + 11 = 47
         assert midi == 47
+
+
+# ---------------------------------------------------------------------------
+# Voicing styles (close, drop-2, drop-3)
+# ---------------------------------------------------------------------------
+
+
+class TestVoicingStyles:
+    KEY_C = {"tonic": "C", "mode": "Major"}
+
+    def test_close_default_unchanged(self):
+        data = {"type": "chord", "text": "C", "root": "C"}
+        assert get_chord_midi_notes(data, self.KEY_C) == [48, 52, 55]
+
+    def test_close_explicit_same_result(self):
+        data = {"type": "chord", "text": "C", "root": "C"}
+        assert get_chord_midi_notes(data, self.KEY_C, voicing_style="close") == [48, 52, 55]
+
+    def test_drop2_four_note_chord(self):
+        data = {"type": "chord", "text": "Cmaj7", "root": "C"}
+        # Close: [48, 52, 55, 59]. Drop-2: drop 55→43. Sorted: [43, 48, 52, 59].
+        midis = get_chord_midi_notes(data, self.KEY_C, voicing_style="drop2")
+        assert midis == [43, 48, 52, 59]
+
+    def test_drop3_four_note_chord(self):
+        data = {"type": "chord", "text": "Cmaj7", "root": "C"}
+        # Close: [48, 52, 55, 59]. Drop-3: drop 52→40. Sorted: [40, 48, 55, 59].
+        midis = get_chord_midi_notes(data, self.KEY_C, voicing_style="drop3")
+        assert midis == [40, 48, 55, 59]
+
+    def test_drop2_triad(self):
+        data = {"type": "chord", "text": "C", "root": "C"}
+        # Triad: [48, 52, 55]. Drop-2: drop 52→40. Sorted: [40, 48, 55].
+        midis = get_chord_midi_notes(data, self.KEY_C, voicing_style="drop2")
+        assert midis == [40, 48, 55]
+
+    def test_drop3_triad_no_change(self):
+        data = {"type": "chord", "text": "C", "root": "C"}
+        # Triad only has 3 notes — drop-3 requires >= 4, so no change.
+        midis = get_chord_midi_notes(data, self.KEY_C, voicing_style="drop3")
+        assert midis == [48, 52, 55]
+
+
+# ---------------------------------------------------------------------------
+# Voice leading
+# ---------------------------------------------------------------------------
+
+
+class TestVoiceLeading:
+    KEY_C = {"tonic": "C", "mode": "Major"}
+
+    def test_no_prev_uses_root_position(self):
+        data = {"type": "chord", "text": "C", "root": "C"}
+        midis = get_chord_midi_notes(data, self.KEY_C, prev_midis=None)
+        assert midis == [48, 52, 55]
+
+    def test_c_to_f_minimizes_movement(self):
+        c_data = {"type": "chord", "text": "C", "root": "C"}
+        f_data = {"type": "chord", "text": "F", "root": "F"}
+        c_midis = get_chord_midi_notes(c_data, self.KEY_C)  # [48, 52, 55]
+        f_midis = get_chord_midi_notes(f_data, self.KEY_C, prev_midis=c_midis)
+        # Voice-led F should have less total movement than root position F [53, 57, 60].
+        root_f = [53, 57, 60]
+        root_cost = sum(abs(a - b) for a, b in zip(sorted(c_midis), sorted(root_f)))
+        led_cost = sum(abs(a - b) for a, b in zip(sorted(c_midis), sorted(f_midis)))
+        assert led_cost <= root_cost
+
+    def test_voice_leading_deterministic(self):
+        c_data = {"type": "chord", "text": "C", "root": "C"}
+        g_data = {"type": "chord", "text": "G", "root": "G"}
+        c_midis = get_chord_midi_notes(c_data, self.KEY_C)
+        g1 = get_chord_midi_notes(g_data, self.KEY_C, prev_midis=c_midis)
+        g2 = get_chord_midi_notes(g_data, self.KEY_C, prev_midis=c_midis)
+        assert g1 == g2
+
+    def test_voice_leading_result_ascending(self):
+        c_data = {"type": "chord", "text": "C", "root": "C"}
+        am_data = {"type": "chord", "text": "Am", "root": "A"}
+        c_midis = get_chord_midi_notes(c_data, self.KEY_C)
+        am_midis = get_chord_midi_notes(am_data, self.KEY_C, prev_midis=c_midis)
+        assert am_midis == sorted(am_midis)
+
+    def test_voice_leading_with_drop2(self):
+        c_data = {"type": "chord", "text": "Cmaj7", "root": "C"}
+        f_data = {"type": "chord", "text": "Fmaj7", "root": "F"}
+        c_midis = get_chord_midi_notes(c_data, self.KEY_C, voicing_style="drop2")
+        f_midis = get_chord_midi_notes(
+            f_data, self.KEY_C, voicing_style="drop2", prev_midis=c_midis,
+        )
+        assert f_midis == sorted(f_midis)
+        assert len(f_midis) == 4

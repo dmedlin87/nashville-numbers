@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from typing import Any
 
-from .voicing import get_bass_midi, get_chord_midi_notes, slot_to_chord_data
+from .voicing import get_bass_midi, get_chord_midi_notes, get_chord_notes, get_chord_root_value, slot_to_chord_data
 
 
 def build_arrangement_sequence(plan: dict[str, Any]) -> dict[str, Any]:
@@ -23,22 +23,41 @@ def build_arrangement_sequence(plan: dict[str, Any]) -> dict[str, Any]:
 
     cursor_beats = float(plan["count_in_beats"])
 
+    voicing_style = plan.get("voicing_style", "close")
+    voice_leading = plan.get("voice_leading", False)
+    prev_midis: list[int] | None = None
+
     for section_index, section in enumerate(plan["sections"]):
         for bar_index, bar in enumerate(section["bars"]):
             bar_start_beats = cursor_beats
             for slot_index, slot in enumerate(bar["slots"]):
                 chord_data = slot_to_chord_data(slot)
                 key = {"tonic": slot["key"]["tonic"], "mode": slot["key"]["mode"]}
-                midis = get_chord_midi_notes(chord_data, key)
+                if voice_leading or voicing_style != "close":
+                    midis = get_chord_midi_notes(
+                        chord_data, key,
+                        voicing_style=voicing_style,
+                        prev_midis=prev_midis if voice_leading else None,
+                    )
+                else:
+                    midis = get_chord_midi_notes(chord_data, key)
+                prev_midis = midis
                 if not midis:
                     continue
 
                 base_velocity = 82 if groove["id"] == "lantern" else 96
-                events.extend(
-                    _build_chord_events_from_pattern(
-                        slot, midis, groove, bar_start_beats, beat_ms, base_velocity,
+                if "arp_pattern" in groove:
+                    events.extend(
+                        _build_arp_events(
+                            slot, midis, groove, bar_start_beats, beat_ms, base_velocity,
+                        )
                     )
-                )
+                else:
+                    events.extend(
+                        _build_chord_events_from_pattern(
+                            slot, midis, groove, bar_start_beats, beat_ms, base_velocity,
+                        )
+                    )
 
                 slot_start_ms = round((bar_start_beats + slot["beat_start"]) * beat_ms)
                 slot_duration_ms = max(
@@ -132,6 +151,10 @@ def _build_bass_events(
     beat_ms: float,
 ) -> list[dict[str, Any]]:
     """Generate bass events for a slot per the groove's bass_pattern."""
+    # Walking bass — generate scale-walking events.
+    if groove.get("bass_pattern") == "walking" and "bass_hits" not in groove:
+        return _build_walking_bass_events(slot, chord_data, key, start_ms, beat_ms)
+
     # If the groove has explicit bass_hits, use those.
     if "bass_hits" in groove:
         return _build_bass_events_from_hits(
@@ -256,4 +279,102 @@ def _apply_expression(
         if vel_var > 0 and "velocity" in event:
             offset = rng.randint(-vel_var, vel_var)
             event["velocity"] = max(1, min(127, event["velocity"] + offset))
+
+
+def _build_arp_events(
+    slot: dict[str, Any],
+    midis: list[int],
+    groove: dict[str, Any],
+    bar_start_beats: float,
+    beat_ms: float,
+    base_velocity: int,
+) -> list[dict[str, Any]]:
+    """Generate individual note events from an arpeggio pattern."""
+    arp = groove["arp_pattern"]
+    note_indices: list[int] = arp["note_indices"]
+    step_beats: float = arp["step_beats"]
+    arp_gate: float = arp.get("gate", 0.8)
+    vel_curve: list[float] = arp.get("velocity_curve", [1.0] * len(note_indices))
+
+    events: list[dict[str, Any]] = []
+    slot_start_beats = bar_start_beats + slot["beat_start"]
+
+    step = 0
+    while True:
+        beat_offset = step * step_beats
+        if beat_offset >= slot["beat_duration"]:
+            break
+
+        idx_in_pattern = step % len(note_indices)
+        note_idx = note_indices[idx_in_pattern] % len(midis)
+        midi = midis[note_idx]
+
+        start_ms = round((slot_start_beats + beat_offset) * beat_ms)
+        duration_ms = max(60, round(step_beats * beat_ms * arp_gate))
+
+        vel_scale = vel_curve[idx_in_pattern % len(vel_curve)]
+        velocity = max(1, min(127, round(base_velocity * vel_scale)))
+
+        events.append({
+            "kind": "note",
+            "delay_ms": start_ms,
+            "duration_ms": duration_ms,
+            "velocity": velocity,
+            "channel": 0,
+            "midi": midi,
+        })
+        step += 1
+
+    return events
+
+
+def _build_walking_bass_events(
+    slot: dict[str, Any],
+    chord_data: dict[str, Any],
+    key: dict[str, str],
+    start_ms: int,
+    beat_ms: float,
+) -> list[dict[str, Any]]:
+    """Generate walking bass events: root, 3rd, 5th, octave root."""
+    bass_midi = get_bass_midi(chord_data, key)
+    root_val = get_chord_root_value(chord_data, key)
+    chord_pcs = get_chord_notes(chord_data, key)
+
+    walk_midis = [bass_midi]
+
+    if len(chord_pcs) >= 2:
+        walk_midis.append(_bass_range_note(bass_midi, chord_pcs[1], root_val))
+    if len(chord_pcs) >= 3:
+        walk_midis.append(_bass_range_note(bass_midi, chord_pcs[2], root_val))
+
+    walk_midis.append(max(28, min(52, bass_midi + 12)))
+
+    beats = slot["beat_duration"]
+    step_beats = beats / len(walk_midis)
+    events: list[dict[str, Any]] = []
+
+    for i, midi in enumerate(walk_midis):
+        delay = start_ms + round(i * step_beats * beat_ms)
+        duration = max(100, round(step_beats * beat_ms * 0.85))
+        events.append({
+            "kind": "note",
+            "delay_ms": delay,
+            "duration_ms": duration,
+            "velocity": 82 if i == 0 else 76,
+            "channel": 1,
+            "midi": max(28, min(52, midi)),
+        })
+
+    return events
+
+
+def _bass_range_note(root_midi: int, pc: int, root_pc: int) -> int:
+    """Convert a pitch class to a bass-range MIDI note near the root."""
+    interval = (pc - root_pc + 12) % 12
+    midi = root_midi + interval
+    while midi > 52:
+        midi -= 12
+    while midi < 28:
+        midi += 12
+    return midi
 
