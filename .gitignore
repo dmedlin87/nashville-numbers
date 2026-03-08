@@ -1,7 +1,95 @@
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
+*.pyo
+*.pyd
 
-# Python build artifacts
+# ── Virtual environments ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env
+.env.*
+!.env.example
+
+# ── Build / distribution ──────────────────────────────────────────────────────
+dist/
+build/
 *.egg-info/
+*.egg
+MANIFEST
+wheels/
+*.whl
+*.tar.gz
+*.zip
+pip-wheel-metadata/
+share/python-wheels/
+
+# ── Test / coverage ───────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+nosetests.xml
+test-results/
+
+# ── Type checkers / linters ───────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+.ruff_cache/
+
+# ── Hypothesis / property-based testing ───────────────────────────────────────
+.hypothesis/
+
+# ── Benchmarks ────────────────────────────────────────────────────────────────
+.benchmarks/
+
+# ── Node (package-lock.json is committed; ignore generated node_modules) ──────
+node_modules/
+
+# ── IDE / editors ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.orig
+
+# ── OS artifacts ──────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── Logs / temp ───────────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.bak
+*.pid
+
+# ── Claude / AI tool local config ─────────────────────────────────────────────
+.claude/
+
+# ── Jules agent workspace ─────────────────────────────────────────────────────
+.Jules/
+.jules/
+
+# ── Personal notes / research documents ──────────────────────────────────────
+*-research-*.md
+*-deep-research.md
+*-audit.md
+prompt.md
