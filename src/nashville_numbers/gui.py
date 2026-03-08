@@ -256,31 +256,34 @@ _HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Nashville Numbers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
   /* ── Base ──────────────────────────────────────────────────────────────── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg:          #0d0d1a;
-    --surface:     #14142b;
-    --surface2:    #1c1c38;
-    --accent:      #7c5cfc;
-    --accent2:     #5e3de8;
-    --glow:        rgba(124, 92, 252, 0.45);
-    --text:        #e8e8ff;
-    --text-muted:  #a0a0c0;
-    --success:     #4ade80;
-    --error:       #f87171;
-    --border:      rgba(124, 92, 252, 0.25);
-    --radius-sm:   6px;
-    --radius-md:   10px;
-    --radius-lg:   14px;
-    --radius:      14px;
+    --bg:          #1a1714;
+    --surface:     #231f1b;
+    --surface2:    #2c2722;
+    --accent:      #d4915c;
+    --accent2:     #c27a3f;
+    --glow:        rgba(212, 145, 92, 0.35);
+    --text:        #e8dfd4;
+    --text-muted:  #9a8e80;
+    --success:     #7bc67e;
+    --error:       #d4645c;
+    --border:      rgba(212, 145, 92, 0.22);
+    --radius-sm:   4px;
+    --radius-md:   8px;
+    --radius-lg:   12px;
+    --radius:      12px;
     --ls-tight:    0.04em;
-    --ls-wide:     0.1em;
-    --font:        'Segoe UI', system-ui, -apple-system, sans-serif;
-    --font-mono:   'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-    --transition:  0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    --ls-wide:     0.12em;
+    --font:        'Outfit', system-ui, -apple-system, sans-serif;
+    --font-mono:   'DM Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    --transition:  0.2s cubic-bezier(0.4, 0, 0.2, 1);
     --content-max: 1700px;
     --page-gutter: clamp(0.85rem, 2vw, 2rem);
     --panel-gap:   clamp(1rem, 1.8vw, 1.5rem);
@@ -296,14 +299,23 @@ _HTML = r"""<!DOCTYPE html>
     overflow-x: hidden;
   }
 
-  /* ── Starfield background ───────────────────────────────────────────────── */
+  /* ── Warm studio texture background ────────────────────────────────────── */
   body::before {
     content: '';
     position: fixed;
     inset: 0;
     background:
-      radial-gradient(ellipse 80% 60% at 20% 10%, rgba(124,92,252,0.12) 0%, transparent 60%),
-      radial-gradient(ellipse 60% 80% at 80% 90%, rgba(94,61,232,0.10) 0%, transparent 60%);
+      radial-gradient(ellipse 90% 50% at 15% 5%, rgba(212,145,92,0.07) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 70% at 85% 95%, rgba(194,122,63,0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='1' height='1' fill='%23ffffff' opacity='0.015'/%3E%3C/svg%3E") repeat;
     pointer-events: none;
     z-index: 0;
   }
@@ -346,25 +358,27 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .logo-icon {
-    font-size: 2.4rem;
-    filter: drop-shadow(0 0 12px var(--glow));
+    font-size: 2.2rem;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
   }
 
   h1 {
-    font-size: clamp(1.8rem, 5vw, 2.8rem);
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    background: linear-gradient(135deg, #a78bfa 0%, #7c5cfc 40%, #c084fc 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    text-shadow: none;
+    font-size: clamp(1.7rem, 4.5vw, 2.5rem);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  h1 .hl {
+    color: var(--accent);
   }
 
   .tagline {
     color: var(--text-muted);
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     letter-spacing: var(--ls-tight);
+    font-weight: 500;
   }
 
   /* ── Card ───────────────────────────────────────────────────────────────── */
@@ -376,17 +390,15 @@ _HTML = r"""<!DOCTYPE html>
     width: 100%;
     max-width: none;
     box-shadow:
-      0 0 0 1px rgba(124,92,252,0.08),
-      0 8px 40px rgba(0,0,0,0.55),
-      0 0 80px rgba(124,92,252,0.06);
+      0 1px 0 0 rgba(255,255,255,0.03) inset,
+      0 8px 32px rgba(0,0,0,0.45);
     transition: box-shadow var(--transition);
   }
 
   .card:hover {
     box-shadow:
-      0 0 0 1px rgba(124,92,252,0.18),
-      0 8px 50px rgba(0,0,0,0.65),
-      0 0 100px rgba(124,92,252,0.10);
+      0 1px 0 0 rgba(255,255,255,0.04) inset,
+      0 8px 40px rgba(0,0,0,0.55);
   }
 
   /* ── Section labels ─────────────────────────────────────────────────────── */
@@ -458,11 +470,11 @@ _HTML = r"""<!DOCTYPE html>
       filter var(--transition),
       transform var(--transition),
       box-shadow var(--transition);
-    box-shadow: 0 4px 20px rgba(124,92,252,0.4);
+    box-shadow: 0 4px 20px rgba(212,145,92,0.4);
     white-space: nowrap;
   }
 
-  .btn-convert:hover  { filter: brightness(1.15); transform: translateY(-1px); box-shadow: 0 6px 28px rgba(124,92,252,0.55); }
+  .btn-convert:hover  { filter: brightness(1.15); transform: translateY(-1px); box-shadow: 0 6px 28px rgba(212,145,92,0.55); }
   .btn-convert:active { filter: brightness(0.95); transform: translateY(0); }
   .btn-convert.loading { opacity: 0.7; pointer-events: none; }
 
@@ -496,7 +508,7 @@ _HTML = r"""<!DOCTYPE html>
   .btn-clear:hover {
     border-color: var(--accent);
     color: var(--text);
-    background: rgba(124,92,252,0.08);
+    background: rgba(212,145,92,0.08);
   }
 
   /* ── Kbd hint ───────────────────────────────────────────────────────────── */
@@ -541,13 +553,13 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .output-box.has-result {
-    border-color: rgba(74, 222, 128, 0.35);
-    box-shadow: 0 0 20px rgba(74, 222, 128, 0.08);
+    border-color: rgba(123, 198, 126, 0.35);
+    box-shadow: 0 0 20px rgba(123, 198, 126, 0.08);
   }
 
   .output-box.has-error {
-    border-color: rgba(248, 113, 113, 0.4);
-    box-shadow: 0 0 20px rgba(248, 113, 113, 0.08);
+    border-color: rgba(212, 100, 92, 0.4);
+    box-shadow: 0 0 20px rgba(212, 100, 92, 0.08);
   }
 
   .output-key {
@@ -642,9 +654,9 @@ _HTML = r"""<!DOCTYPE html>
   .example-chip:hover,
   .example-chip:focus-visible {
     border-color: var(--accent);
-    background: rgba(124,92,252,0.09);
+    background: rgba(212,145,92,0.09);
     transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(124,92,252,0.18);
+    box-shadow: 0 4px 16px rgba(212,145,92,0.18);
     outline: none;
   }
 
@@ -724,20 +736,20 @@ _HTML = r"""<!DOCTYPE html>
     border: 1px solid var(--border);
     border-radius: 999px;
     padding: 0.24rem 0.65rem;
-    background: rgba(124,92,252,0.08);
+    background: rgba(212,145,92,0.08);
     color: var(--text-muted);
   }
 
   .audio-status-pill.ready {
-    border-color: rgba(74, 222, 128, 0.45);
-    color: #bbf7d0;
-    background: rgba(74, 222, 128, 0.08);
+    border-color: rgba(123, 198, 126, 0.45);
+    color: #b3d9b5;
+    background: rgba(123, 198, 126, 0.08);
   }
 
   .audio-status-pill.warn {
-    border-color: rgba(248, 113, 113, 0.45);
-    color: #fecaca;
-    background: rgba(248, 113, 113, 0.08);
+    border-color: rgba(212, 100, 92, 0.45);
+    color: #e8b3ac;
+    background: rgba(212, 100, 92, 0.08);
   }
 
   .audio-status-detail {
@@ -762,7 +774,7 @@ _HTML = r"""<!DOCTYPE html>
   .audio-install-btn:hover {
     color: var(--text);
     border-color: var(--accent);
-    background: rgba(124, 92, 252, 0.12);
+    background: rgba(212, 145, 92, 0.12);
   }
 
   .audio-install-btn.loading {
@@ -788,7 +800,7 @@ _HTML = r"""<!DOCTYPE html>
   .audio-progress-fill {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, var(--accent), #a78bfa);
+    background: linear-gradient(90deg, var(--accent), #e6b882);
     border-radius: 2px;
     transition: width 0.4s ease;
   }
@@ -953,35 +965,35 @@ _HTML = r"""<!DOCTYPE html>
     cursor: pointer;
   }
 
-  .fb-note-dot.tonic { background: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.5); }
-  .fb-note-dot.degree-1 { background: #ef4444; }
-  .fb-note-dot.degree-2 { background: #f97316; }
-  .fb-note-dot.degree-3 { background: #f59e0b; }
-  .fb-note-dot.degree-4 { background: #10b981; }
-  .fb-note-dot.degree-5 { background: #3b82f6; }
-  .fb-note-dot.degree-6 { background: #8b5cf6; }
-  .fb-note-dot.degree-7 { background: #ec4899; }
+  .fb-note-dot.tonic { background: #d4915c; box-shadow: 0 0 10px rgba(212, 145, 92, 0.5); }
+  .fb-note-dot.degree-1 { background: #c2553a; }
+  .fb-note-dot.degree-2 { background: #d4915c; }
+  .fb-note-dot.degree-3 { background: #c9a84c; }
+  .fb-note-dot.degree-4 { background: #5a9e6f; }
+  .fb-note-dot.degree-5 { background: #4a82a6; }
+  .fb-note-dot.degree-6 { background: #8a6eb0; }
+  .fb-note-dot.degree-7 { background: #b8607a; }
 
   .fb-note-dot.dimmed { opacity: 0.2; transform: translate(-50%, -50%) scale(0.8); }
 
   .interactive-token {
     cursor: pointer;
-    border-bottom: 1px dashed rgba(124, 92, 252, 0.3);
+    border-bottom: 1px dashed rgba(212, 145, 92, 0.3);
     transition: border-color 0.2s, background 0.2s;
     border-radius: var(--radius-sm);
     padding: 0.05em 0.15em;
   }
   .interactive-token:hover {
     border-bottom-color: currentColor;
-    background: rgba(124, 92, 252, 0.1);
+    background: rgba(212, 145, 92, 0.1);
   }
   .interactive-token:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
-    background: rgba(124, 92, 252, 0.1);
+    background: rgba(212, 145, 92, 0.1);
   }
   .interactive-token.active-highlight {
-    background: rgba(124, 92, 252, 0.25);
+    background: rgba(212, 145, 92, 0.25);
     border-bottom: 2px solid var(--accent);
   }
 
@@ -1001,7 +1013,7 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .fb-filter-chip.preset:hover {
-    background: rgba(124, 92, 252, 0.15);
+    background: rgba(212, 145, 92, 0.15);
     border-color: var(--accent);
   }
 
@@ -1068,7 +1080,7 @@ _HTML = r"""<!DOCTYPE html>
   .tab-btn.active {
     background: var(--accent);
     color: #fff;
-    box-shadow: 0 2px 8px rgba(124,92,252,0.35);
+    box-shadow: 0 2px 8px rgba(212,145,92,0.35);
   }
 
   /* ── Builder mode toggle ─────────────────────────────────────────────────── */
@@ -1102,7 +1114,7 @@ _HTML = r"""<!DOCTYPE html>
     font-family: inherit;
   }
 
-  .mode-btn.active { background: rgba(124,92,252,0.3); color: var(--text); }
+  .mode-btn.active { background: rgba(212,145,92,0.3); color: var(--text); }
 
   .key-row {
     display: flex;
@@ -1147,7 +1159,7 @@ _HTML = r"""<!DOCTYPE html>
 
   .progression-track.has-items {
     border-style: solid;
-    border-color: rgba(124,92,252,0.5);
+    border-color: rgba(212,145,92,0.5);
   }
 
   .progression-empty {
@@ -1226,7 +1238,7 @@ _HTML = r"""<!DOCTYPE html>
   .sep-btn:hover {
     border-color: var(--accent);
     color: var(--text);
-    background: rgba(124,92,252,0.08);
+    background: rgba(212,145,92,0.08);
   }
 
   .track-spacer { flex: 1; }
@@ -1243,7 +1255,7 @@ _HTML = r"""<!DOCTYPE html>
     font-family: inherit;
   }
 
-  .btn-undo:hover { border-color: rgba(248,113,113,0.5); color: var(--error); }
+  .btn-undo:hover { border-color: rgba(212,100,92,0.5); color: var(--error); }
 
   /* ── Palette labels ──────────────────────────────────────────────────────── */
   .palette-label {
@@ -1281,7 +1293,7 @@ _HTML = r"""<!DOCTYPE html>
 
   .note-btn:hover {
     border-color: var(--accent);
-    background: rgba(124,92,252,0.15);
+    background: rgba(212,145,92,0.15);
     transform: translateY(-1px);
   }
 
@@ -1289,7 +1301,7 @@ _HTML = r"""<!DOCTYPE html>
     background: var(--accent);
     border-color: var(--accent);
     color: #fff;
-    box-shadow: 0 3px 10px rgba(124,92,252,0.45);
+    box-shadow: 0 3px 10px rgba(212,145,92,0.45);
     transform: translateY(-1px);
   }
 
@@ -1341,12 +1353,12 @@ _HTML = r"""<!DOCTYPE html>
     background: var(--accent);
     border-color: var(--accent);
     color: #fff;
-    box-shadow: 0 3px 10px rgba(124,92,252,0.45);
+    box-shadow: 0 3px 10px rgba(212,145,92,0.45);
   }
 
   .num-btn:hover:not(.active) {
     border-color: var(--accent);
-    background: rgba(124,92,252,0.15);
+    background: rgba(212,145,92,0.15);
   }
 
   .acc-btn {
@@ -1365,7 +1377,7 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .acc-btn.selected {
-    background: rgba(124,92,252,0.25);
+    background: rgba(212,145,92,0.25);
     border-color: var(--accent);
     color: var(--text);
   }
@@ -1394,11 +1406,11 @@ _HTML = r"""<!DOCTYPE html>
   .quality-btn:hover {
     border-color: var(--accent);
     color: var(--text);
-    background: rgba(124,92,252,0.1);
+    background: rgba(212,145,92,0.1);
   }
 
   .quality-btn.active {
-    background: rgba(124,92,252,0.3);
+    background: rgba(212,145,92,0.3);
     border-color: var(--accent);
     color: var(--text);
   }
@@ -1442,8 +1454,8 @@ _HTML = r"""<!DOCTYPE html>
 
   .lab-pill {
     border-radius: 999px;
-    border: 1px solid rgba(124, 92, 252, 0.22);
-    background: rgba(124, 92, 252, 0.06);
+    border: 1px solid rgba(212, 145, 92, 0.22);
+    background: rgba(212, 145, 92, 0.06);
     color: var(--text-muted);
     font-size: 0.7rem;
     font-weight: 800;
@@ -1463,7 +1475,7 @@ _HTML = r"""<!DOCTYPE html>
     background:
       linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0)),
       var(--surface2);
-    border: 1px solid rgba(124, 92, 252, 0.2);
+    border: 1px solid rgba(212, 145, 92, 0.2);
     border-radius: var(--radius-lg);
     padding: 1rem;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
@@ -1477,9 +1489,9 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .lab-stat {
-    border: 1px solid rgba(124, 92, 252, 0.16);
+    border: 1px solid rgba(212, 145, 92, 0.16);
     border-radius: var(--radius-lg);
-    background: rgba(13, 13, 26, 0.36);
+    background: rgba(18, 16, 14, 0.36);
     padding: 0.75rem 0.8rem;
     min-height: 94px;
   }
@@ -1540,8 +1552,8 @@ _HTML = r"""<!DOCTYPE html>
   .lab-input,
   .lab-select {
     width: 100%;
-    background: rgba(13, 13, 26, 0.5);
-    border: 1px solid rgba(124, 92, 252, 0.25);
+    background: rgba(18, 16, 14, 0.5);
+    border: 1px solid rgba(212, 145, 92, 0.25);
     border-radius: var(--radius-md);
     color: var(--text);
     font-family: var(--font);
@@ -1555,7 +1567,7 @@ _HTML = r"""<!DOCTYPE html>
   .lab-input:focus,
   .lab-select:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
+    box-shadow: 0 0 0 3px rgba(212, 145, 92, 0.12);
   }
 
   .lab-toggle {
@@ -1563,9 +1575,9 @@ _HTML = r"""<!DOCTYPE html>
     align-items: center;
     justify-content: space-between;
     gap: 0.8rem;
-    border: 1px solid rgba(124, 92, 252, 0.22);
+    border: 1px solid rgba(212, 145, 92, 0.22);
     border-radius: var(--radius-md);
-    background: rgba(13, 13, 26, 0.46);
+    background: rgba(18, 16, 14, 0.46);
     padding: 0.7rem 0.8rem;
     margin-bottom: 1rem;
   }
@@ -1599,9 +1611,9 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .groove-card {
-    border: 1px solid rgba(124, 92, 252, 0.18);
+    border: 1px solid rgba(212, 145, 92, 0.18);
     border-radius: var(--radius-lg);
-    background: rgba(13, 13, 26, 0.36);
+    background: rgba(18, 16, 14, 0.36);
     color: var(--text);
     padding: 0.75rem;
     text-align: left;
@@ -1612,17 +1624,17 @@ _HTML = r"""<!DOCTYPE html>
 
   .groove-card:hover,
   .groove-card:focus-visible {
-    border-color: rgba(124, 92, 252, 0.5);
-    background: rgba(124, 92, 252, 0.12);
+    border-color: rgba(212, 145, 92, 0.5);
+    background: rgba(212, 145, 92, 0.12);
     transform: translateY(-1px);
     box-shadow: 0 8px 20px rgba(0,0,0,0.18);
     outline: none;
   }
 
   .groove-card.active {
-    border-color: rgba(124, 92, 252, 0.72);
-    background: linear-gradient(135deg, rgba(124, 92, 252, 0.28), rgba(94, 61, 232, 0.16));
-    box-shadow: 0 12px 30px rgba(94, 61, 232, 0.18);
+    border-color: rgba(212, 145, 92, 0.72);
+    background: linear-gradient(135deg, rgba(212, 145, 92, 0.28), rgba(194, 122, 63, 0.16));
+    box-shadow: 0 12px 30px rgba(194, 122, 63, 0.18);
   }
 
   .groove-name {
@@ -1652,7 +1664,7 @@ _HTML = r"""<!DOCTYPE html>
     justify-content: center;
     gap: 0.45rem;
     border-radius: var(--radius-md);
-    border: 1px solid rgba(124, 92, 252, 0.28);
+    border: 1px solid rgba(212, 145, 92, 0.28);
     padding: 0.65rem 0.95rem;
     font-size: 0.84rem;
     font-weight: 800;
@@ -1666,11 +1678,11 @@ _HTML = r"""<!DOCTYPE html>
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
     color: #fff;
     border-color: transparent;
-    box-shadow: 0 6px 22px rgba(124, 92, 252, 0.3);
+    box-shadow: 0 6px 22px rgba(212, 145, 92, 0.3);
   }
 
   .btn-transport.secondary {
-    background: rgba(13, 13, 26, 0.45);
+    background: rgba(18, 16, 14, 0.45);
     color: var(--text);
   }
 
@@ -1681,7 +1693,7 @@ _HTML = r"""<!DOCTYPE html>
 
   .btn-transport:hover:not(:disabled) {
     transform: translateY(-1px);
-    border-color: rgba(124, 92, 252, 0.55);
+    border-color: rgba(212, 145, 92, 0.55);
   }
 
   .btn-transport:disabled {
@@ -1691,11 +1703,25 @@ _HTML = r"""<!DOCTYPE html>
     box-shadow: none;
   }
 
+  .btn-transport.loop-toggle {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    font-size: 0.8rem;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .btn-transport.loop-toggle.active {
+    background: rgba(212, 145, 92, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
   .lab-transport-status {
     margin-top: 0.85rem;
     border-radius: var(--radius-md);
-    border: 1px solid rgba(124, 92, 252, 0.16);
-    background: rgba(13, 13, 26, 0.46);
+    border: 1px solid rgba(212, 145, 92, 0.16);
+    background: rgba(18, 16, 14, 0.46);
     padding: 0.7rem 0.8rem;
     font-size: 0.8rem;
     line-height: 1.45;
@@ -1703,18 +1729,18 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .lab-transport-status.ready {
-    border-color: rgba(74, 222, 128, 0.35);
-    color: #bbf7d0;
+    border-color: rgba(123, 198, 126, 0.35);
+    color: #b3d9b5;
   }
 
   .lab-transport-status.warn {
-    border-color: rgba(248, 113, 113, 0.4);
-    color: #fecaca;
+    border-color: rgba(212, 100, 92, 0.4);
+    color: #e8b3ac;
   }
 
   .lab-transport-status.busy {
-    border-color: rgba(124, 92, 252, 0.4);
-    color: #ded9ff;
+    border-color: rgba(212, 145, 92, 0.4);
+    color: #e8dfd4;
   }
 
   .timeline-shell {
@@ -1723,11 +1749,11 @@ _HTML = r"""<!DOCTYPE html>
 
   .arrangement-placeholder {
     min-height: 240px;
-    border: 1px dashed rgba(124, 92, 252, 0.25);
+    border: 1px dashed rgba(212, 145, 92, 0.25);
     border-radius: var(--radius-lg);
     background:
-      radial-gradient(circle at top right, rgba(124, 92, 252, 0.13), transparent 42%),
-      rgba(13, 13, 26, 0.4);
+      radial-gradient(circle at top right, rgba(212, 145, 92, 0.13), transparent 42%),
+      rgba(18, 16, 14, 0.4);
     padding: 1rem;
     color: var(--text-muted);
     display: grid;
@@ -1747,9 +1773,9 @@ _HTML = r"""<!DOCTYPE html>
   }
 
   .timeline-section {
-    border: 1px solid rgba(124, 92, 252, 0.18);
+    border: 1px solid rgba(212, 145, 92, 0.18);
     border-radius: var(--radius-lg);
-    background: rgba(13, 13, 26, 0.34);
+    background: rgba(18, 16, 14, 0.34);
     padding: 0.85rem;
   }
 
@@ -1780,8 +1806,8 @@ _HTML = r"""<!DOCTYPE html>
 
   .timeline-bar {
     border-radius: var(--radius-lg);
-    border: 1px solid rgba(124, 92, 252, 0.12);
-    background: rgba(28, 28, 56, 0.72);
+    border: 1px solid rgba(212, 145, 92, 0.12);
+    background: rgba(38, 34, 30, 0.72);
     padding: 0.72rem;
   }
 
@@ -1804,7 +1830,7 @@ _HTML = r"""<!DOCTYPE html>
   .timeline-bar-preview {
     font-family: var(--font-mono);
     font-size: 0.78rem;
-    color: #d9d5ff;
+    color: #d4c9b8;
   }
 
   .timeline-slot-row {
@@ -1815,8 +1841,8 @@ _HTML = r"""<!DOCTYPE html>
   .timeline-slot {
     width: 100%;
     border-radius: var(--radius-lg);
-    border: 1px solid rgba(124, 92, 252, 0.14);
-    background: rgba(13, 13, 26, 0.45);
+    border: 1px solid rgba(212, 145, 92, 0.14);
+    background: rgba(18, 16, 14, 0.45);
     color: var(--text);
     padding: 0.72rem 0.78rem;
     text-align: left;
@@ -1827,20 +1853,20 @@ _HTML = r"""<!DOCTYPE html>
 
   .timeline-slot:hover,
   .timeline-slot:focus-visible {
-    border-color: rgba(124, 92, 252, 0.55);
+    border-color: rgba(212, 145, 92, 0.55);
     transform: translateY(-1px);
     outline: none;
   }
 
   .timeline-slot.active {
-    border-color: rgba(124, 92, 252, 0.75);
-    background: rgba(124, 92, 252, 0.2);
+    border-color: rgba(212, 145, 92, 0.75);
+    background: rgba(212, 145, 92, 0.2);
   }
 
   .timeline-slot.is-playing {
-    border-color: rgba(74, 222, 128, 0.7);
-    background: rgba(74, 222, 128, 0.14);
-    box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.2);
+    border-color: rgba(123, 198, 126, 0.7);
+    background: rgba(123, 198, 126, 0.14);
+    box-shadow: 0 0 0 1px rgba(123, 198, 126, 0.2);
   }
 
   .timeline-slot-top {
@@ -1881,8 +1907,8 @@ _HTML = r"""<!DOCTYPE html>
 
   .runway-card {
     border-radius: var(--radius-lg);
-    border: 1px solid rgba(124, 92, 252, 0.16);
-    background: rgba(13, 13, 26, 0.36);
+    border: 1px solid rgba(212, 145, 92, 0.16);
+    background: rgba(18, 16, 14, 0.36);
     padding: 0.82rem;
   }
 
@@ -1931,11 +1957,11 @@ _HTML = r"""<!DOCTYPE html>
 
   /* ── Music Lab muted hierarchy ─────────────────────────────────────────── */
   .music-lab-section .lab-panel {
-    border-color: rgba(124, 92, 252, 0.12);
+    border-color: rgba(212, 145, 92, 0.12);
   }
 
   .music-lab-section .btn-transport.primary {
-    box-shadow: 0 4px 16px rgba(124, 92, 252, 0.2);
+    box-shadow: 0 4px 16px rgba(212, 145, 92, 0.2);
   }
 
   /* ── Tab subtitles ─────────────────────────────────────────────────────── */
@@ -1967,7 +1993,7 @@ _HTML = r"""<!DOCTYPE html>
 
   /* ── Staged chord preview ──────────────────────────────────────────────── */
   .prog-chip.staged {
-    background: rgba(124, 92, 252, 0.15);
+    background: rgba(212, 145, 92, 0.15);
     border: 1.5px dashed var(--accent);
     color: var(--text-muted);
     animation: none;
@@ -2004,7 +2030,7 @@ _HTML = r"""<!DOCTYPE html>
   <header class="animate-in">
     <div class="logo-row">
       <span class="logo-icon">🎸</span>
-      <h1>Nashville Numbers</h1>
+      <h1><span class="hl">Nashville</span> Numbers</h1>
     </div>
     <p class="tagline">Chord progressions &harr; Nashville Number System</p>
   </header>
@@ -2216,8 +2242,9 @@ _HTML = r"""<!DOCTYPE html>
 
           <div class="transport-row">
             <button class="btn-transport primary" id="arrangementBuildBtn" onclick="buildArrangement()">Build Arrangement</button>
-            <button class="btn-transport secondary" id="arrangementPlayBtn" onclick="playArrangement()" disabled>Play Loop</button>
+            <button class="btn-transport secondary" id="arrangementPlayBtn" onclick="playArrangement()" disabled>Play</button>
             <button class="btn-transport ghost" id="arrangementStopBtn" onclick="stopArrangement()">Stop</button>
+            <button class="btn-transport loop-toggle active" id="loopToggleBtn" onclick="toggleLoop()" title="Loop on/off" aria-pressed="true">&#x21BB; Loop</button>
             <button class="btn-transport secondary" id="arrangementExportBtn" onclick="exportMidi()" disabled>Export MIDI</button>
           </div>
 
@@ -2466,6 +2493,7 @@ let musicLabState = {
   plan: null,
   playTimers: [],
   isPlaying: false,
+  loopEnabled: true,
   activeSlotKey: '',
   lastBuiltInput: ''
 };
@@ -3337,10 +3365,18 @@ function queueLocalSequence(events) {
 
 function finishArrangementPlayback() {
   if (!musicLabState.isPlaying) return;
+  if (musicLabState.loopEnabled && musicLabState.plan) {
+    // Re-trigger playback for continuous looping
+    musicLabState.playTimers.forEach(timer => window.clearTimeout(timer));
+    musicLabState.playTimers = [];
+    document.querySelectorAll('.timeline-slot.is-playing').forEach(node => node.classList.remove('is-playing'));
+    _startArrangementPlayback(musicLabState.plan);
+    return;
+  }
   musicLabState.isPlaying = false;
   document.querySelectorAll('.timeline-slot.is-playing').forEach(node => node.classList.remove('is-playing'));
   syncArrangementButtons();
-  setTransportStatus('Loop finished. Press Play Loop again or keep editing the chart.', 'ready');
+  setTransportStatus('Playback finished.', 'ready');
 }
 
 function scheduleArrangementHighlights(highlights, totalMs) {
@@ -3358,22 +3394,15 @@ function scheduleArrangementHighlights(highlights, totalMs) {
   }, totalMs));
 }
 
-async function playArrangement() {
-  let plan = musicLabState.plan;
-  if (!plan || musicLabState.lastBuiltInput !== getCurrentInputText()) {
-    plan = await buildArrangement({ silent: true });
-    if (!plan) return;
-  }
-
-  stopArrangement({ silent: true });
+async function _startArrangementPlayback(plan) {
   const sequence = buildArrangementSequence(plan);
   if (sequence.events.length === 0) {
     setTransportStatus('No playable chord data was found in the current chart.', 'warn');
+    musicLabState.isPlaying = false;
+    syncArrangementButtons();
     return;
   }
 
-  musicLabState.isPlaying = true;
-  syncArrangementButtons();
   scheduleArrangementHighlights(sequence.highlights, sequence.totalMs);
 
   let usedBackend = false;
@@ -3387,15 +3416,29 @@ async function playArrangement() {
   if (!usedBackend) {
     queueLocalSequence(sequence.events);
     setTransportStatus(
-      audioState.hq_ready
-        ? 'HQ transport was unavailable, so playback switched to the browser fallback.'
-        : 'Browser transport is playing the arrangement loop.',
-      audioState.hq_ready ? 'warn' : 'busy'
+      musicLabState.loopEnabled ? 'Looping\u2026' : 'Playing\u2026',
+      'busy'
     );
     return;
   }
 
-  setTransportStatus('FluidSynth transport is playing the arrangement loop.', 'busy');
+  setTransportStatus(
+    musicLabState.loopEnabled ? 'Looping via FluidSynth\u2026' : 'Playing via FluidSynth\u2026',
+    'busy'
+  );
+}
+
+async function playArrangement() {
+  let plan = musicLabState.plan;
+  if (!plan || musicLabState.lastBuiltInput !== getCurrentInputText()) {
+    plan = await buildArrangement({ silent: true });
+    if (!plan) return;
+  }
+
+  stopArrangement({ silent: true });
+  musicLabState.isPlaying = true;
+  syncArrangementButtons();
+  await _startArrangementPlayback(plan);
 }
 
 function stopArrangement(options = {}) {
@@ -3409,6 +3452,15 @@ function stopArrangement(options = {}) {
   syncArrangementButtons();
   if (!options.silent) {
     setTransportStatus('Transport stopped.', 'ready');
+  }
+}
+
+function toggleLoop() {
+  musicLabState.loopEnabled = !musicLabState.loopEnabled;
+  const btn = document.getElementById('loopToggleBtn');
+  if (btn) {
+    btn.classList.toggle('active', musicLabState.loopEnabled);
+    btn.setAttribute('aria-pressed', musicLabState.loopEnabled ? 'true' : 'false');
   }
 }
 
