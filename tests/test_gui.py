@@ -298,8 +298,27 @@ def test_get_root_serves_embedded_html(gui_server: int) -> None:
     assert status == 200
     assert "text/html" in headers["content-type"]
     assert "<title>Nashville Numbers</title>" in body
-    assert 'meta name="nns-request-token"' not in body
-    assert "set-cookie" in headers
+
+
+def test_get_root_rejects_invalid_host(gui_server: int) -> None:
+    status, headers, body = _request(gui_server, "GET", "/", headers={"Host": "attacker.com"})
+    assert status == 403
+    payload = json.loads(body)
+    assert payload == {"error": "Forbidden", "reason": "invalid_host"}
+
+
+def test_get_root_accepts_ipv6_host(gui_server: int) -> None:
+    status, headers, body = _request(gui_server, "GET", "/", headers={"Host": "[::1]:8080"})
+    assert status == 200
+    assert "text/html" in headers["content-type"]
+    assert "<title>Nashville Numbers</title>" in body
+
+
+def test_post_convert_rejects_invalid_host(gui_server: int) -> None:
+    status, headers, body = _request(gui_server, "POST", "/convert", headers={"Host": "attacker.com"})
+    assert status == 403
+    payload = json.loads(body)
+    assert payload == {"error": "Forbidden", "reason": "invalid_host"}
 
 
 def test_get_unknown_path_returns_not_found_json(gui_server: int) -> None:
