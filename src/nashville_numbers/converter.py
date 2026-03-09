@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 
 from .output_contract import OutputBlock, build_output
@@ -144,6 +145,7 @@ def _convert_chords_to_nns(prog: str, tonic: str, mode: str) -> str:
     return "".join(out) if out else prog
 
 
+@functools.lru_cache(maxsize=1024)
 def _parse_chord_quality(_root: str, quality_raw: str, degree: str, mode: str) -> tuple[str, str]:
     raw = quality_raw.strip()
     compact = raw.replace(" ", "")
@@ -240,6 +242,7 @@ def _convert_nns_to_chords(prog: str, tonic: str, mode: str) -> str:
     return "".join(out) if out else prog
 
 
+@functools.lru_cache(maxsize=1024)
 def _normalize_extension_for_chord(ext_raw: str) -> str:
     if not ext_raw:
         return ""
@@ -248,6 +251,7 @@ def _normalize_extension_for_chord(ext_raw: str) -> str:
     return f"({ext_raw})"
 
 
+@functools.lru_cache(maxsize=1024)
 def _degree_to_note(degree: str, tonic: str) -> str:
     semitone_step = DEGREE_TO_SEMITONE.get(degree)
     letter_offset = DEGREE_TO_LETTER_OFFSET.get(degree)
@@ -281,6 +285,7 @@ def _fallback_note_name(semitone: int, tonic: str) -> str:
     return DEFAULT_NOTE_NAMES[semitone]
 
 
+@functools.lru_cache(maxsize=1024)
 def _suffix_to_chord_quality(suffix: str, degree: str, mode: str) -> str:
     if suffix:
         return suffix

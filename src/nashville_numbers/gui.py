@@ -6,7 +6,6 @@ No external dependencies required – uses only the standard library.
 
 from __future__ import annotations
 
-from html import escape as html_escape
 import secrets
 import socket
 import threading

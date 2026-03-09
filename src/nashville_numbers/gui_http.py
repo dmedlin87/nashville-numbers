@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler
 from typing import Any
 from urllib.parse import urlparse
 
-from .audio import AudioInstallError, AudioUnavailableError
+from .audio import AudioUnavailableError
 from .tone_library import ToneLibraryError
 
 LOG = logging.getLogger(__name__)
