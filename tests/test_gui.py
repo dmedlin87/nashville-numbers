@@ -1233,3 +1233,46 @@ def test_post_arrangement_export_midi_passes_voicing_params(
     assert status == 200
     assert captured["voicing_style"] == "drop3"
     assert captured["voice_leading"] is True
+
+def test_get_audio_service() -> None:
+    class FakeAudioService:
+        pass
+
+    called = False
+
+    def factory() -> object:
+        nonlocal called
+        called = True
+        return FakeAudioService()
+
+    app = gui.GuiApp(audio_service_factory=factory)
+
+    # First call should invoke factory
+    service1 = app.get_audio_service()
+    assert isinstance(service1, FakeAudioService)
+    assert called is True
+
+    # Second call should return cached instance
+    called = False
+    service2 = app.get_audio_service()
+    assert service1 is service2
+    assert called is False
+
+
+def test_get_initialized_audio_service() -> None:
+    class FakeAudioService:
+        pass
+
+    def factory() -> object:
+        return FakeAudioService()
+
+    app = gui.GuiApp(audio_service_factory=factory)
+
+    # Should be None before initialization
+    assert app.get_initialized_audio_service() is None
+
+    # Initialize it
+    app.get_audio_service()
+
+    # Should not be None now
+    assert isinstance(app.get_initialized_audio_service(), FakeAudioService)
