@@ -1099,6 +1099,8 @@ _HTML = r"""<!DOCTYPE html>
     font-family: inherit;
   }
 
+  .tab-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
   .tab-btn.active {
     background: var(--accent);
     color: #fff;
