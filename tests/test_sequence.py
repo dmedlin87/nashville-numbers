@@ -1,6 +1,5 @@
 """Tests for the sequence module — plan-to-event-list conversion."""
 
-import pytest
 
 from nashville_numbers.music_lab import build_progression_plan
 from nashville_numbers.sequence import build_arrangement_sequence

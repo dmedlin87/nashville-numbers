@@ -1233,3 +1233,51 @@ def test_post_arrangement_export_midi_passes_voicing_params(
     assert status == 200
     assert captured["voicing_style"] == "drop3"
     assert captured["voice_leading"] is True
+
+def test_get_audio_service_initializes_and_caches() -> None:
+    calls = 0
+    class SentinelService:
+        pass
+
+    def fake_audio_factory() -> object:
+        nonlocal calls
+        calls += 1
+        return SentinelService()
+
+    app = gui.GuiApp(audio_service_factory=fake_audio_factory)
+
+    assert app.get_initialized_audio_service() is None
+    assert calls == 0
+
+    service1 = app.get_audio_service()
+    assert isinstance(service1, SentinelService)
+    assert calls == 1
+    assert app.get_initialized_audio_service() is service1
+
+    service2 = app.get_audio_service()
+    assert service2 is service1
+    assert calls == 1
+
+def test_get_tone_library_initializes_and_caches() -> None:
+    calls = 0
+    class SentinelLibrary:
+        pass
+
+    def fake_tone_factory() -> ToneLibrary:
+        nonlocal calls
+        calls += 1
+        return SentinelLibrary() # type: ignore
+
+    app = gui.GuiApp(tone_library_factory=fake_tone_factory)
+
+    assert app._tone_library is None
+    assert calls == 0
+
+    lib1 = app.get_tone_library()
+    assert isinstance(lib1, SentinelLibrary)
+    assert calls == 1
+    assert app._tone_library is lib1
+
+    lib2 = app.get_tone_library()
+    assert lib2 is lib1
+    assert calls == 1
