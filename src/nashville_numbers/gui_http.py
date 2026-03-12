@@ -291,7 +291,16 @@ def build_handler(
                 self._send_json({"error": "Missing multipart boundary", "reason": "validation"}, status=400)
                 return None
 
-            body = self.rfile.read(length)
+            chunks: list[bytes] = []
+            remaining = length
+            while remaining > 0:
+                chunk = self.rfile.read(min(remaining, 65536))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            body = b"".join(chunks)
+
             delimiter = b"--" + boundary.encode("utf-8")
             parts = body.split(delimiter)
             fields: dict[str, str] = {}
