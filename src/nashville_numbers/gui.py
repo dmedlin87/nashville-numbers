@@ -2250,7 +2250,7 @@ _HTML = r"""<!DOCTYPE html>
   <!-- Header -->
   <header class="animate-in">
     <div class="logo-row">
-      <span class="logo-icon">🎸</span>
+      <span class="logo-icon" aria-hidden="true">🎸</span>
       <h1><span class="hl">Nashville</span> Numbers</h1>
     </div>
     <p class="tagline">Chord progressions &harr; Nashville Number System</p>
@@ -2352,8 +2352,8 @@ _HTML = r"""<!DOCTYPE html>
     <!-- Controls -->
     <div class="controls">
       <button class="btn-convert" id="convertBtn" onclick="doConvert()">
-        <span class="btn-icon">⚡</span>
-        <span class="spinner"></span>
+        <span class="btn-icon" aria-hidden="true">⚡</span>
+        <span class="spinner" aria-hidden="true"></span>
         Convert
       </button>
       <button class="btn-clear" onclick="doClear()" aria-label="Clear input and result">Clear</button>
@@ -2474,10 +2474,10 @@ _HTML = r"""<!DOCTYPE html>
 
           <div class="transport-row">
             <button class="btn-transport primary" id="arrangementBuildBtn" onclick="buildArrangement()">Build Arrangement</button>
-            <button class="btn-transport secondary" id="arrangementPlayBtn" onclick="playArrangement()" disabled>Play</button>
-            <button class="btn-transport ghost" id="arrangementStopBtn" onclick="stopArrangement()">Stop</button>
+            <button class="btn-transport secondary" id="arrangementPlayBtn" onclick="playArrangement()" disabled title="Build an arrangement first to play.">Play</button>
+            <button class="btn-transport ghost" id="arrangementStopBtn" onclick="stopArrangement()" disabled title="Transport is already stopped.">Stop</button>
             <button class="btn-transport loop-toggle active" id="loopToggleBtn" onclick="toggleLoop()" title="Loop on/off" aria-pressed="true">&#x21BB; Loop</button>
-            <button class="btn-transport secondary" id="arrangementExportBtn" onclick="exportMidi()" disabled>Export MIDI</button>
+            <button class="btn-transport secondary" id="arrangementExportBtn" onclick="exportMidi()" disabled title="Build an arrangement first to export.">Export MIDI</button>
           </div>
 
           <div class="lab-transport-status" id="labTransportStatus">
@@ -3145,9 +3145,21 @@ function syncArrangementButtons() {
   const playBtn = document.getElementById('arrangementPlayBtn');
   const stopBtn = document.getElementById('arrangementStopBtn');
   const exportBtn = document.getElementById('arrangementExportBtn');
-  if (playBtn) playBtn.disabled = !musicLabState.plan;
-  if (stopBtn) stopBtn.disabled = !musicLabState.isPlaying;
-  if (exportBtn) exportBtn.disabled = !musicLabState.plan;
+
+  if (playBtn) {
+    playBtn.disabled = !musicLabState.plan;
+    playBtn.title = playBtn.disabled ? "Build an arrangement first to play." : "Play arrangement";
+  }
+
+  if (stopBtn) {
+    stopBtn.disabled = !musicLabState.isPlaying;
+    stopBtn.title = stopBtn.disabled ? "Transport is already stopped." : "Stop transport";
+  }
+
+  if (exportBtn) {
+    exportBtn.disabled = !musicLabState.plan;
+    exportBtn.title = exportBtn.disabled ? "Build an arrangement first to export." : "Export arrangement to MIDI";
+  }
 }
 
 function refreshMusicLabRuntimeSummary() {
