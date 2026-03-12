@@ -471,12 +471,12 @@ class RuntimeInstaller:
             assets = release.get("assets")
             if not isinstance(assets, list):
                 continue
+            valid_assets = [
+                (str(a.get("name", "")).strip(), str(a.get("browser_download_url", "")).strip())
+                for a in assets if isinstance(a, dict)
+            ]
             for suffix in preferred_suffixes:
-                for asset in assets:
-                    if not isinstance(asset, dict):
-                        continue
-                    name = str(asset.get("name", "")).strip()
-                    download_url = str(asset.get("browser_download_url", "")).strip()
+                for name, download_url in valid_assets:
                     if name.endswith(suffix) and download_url:
                         return RuntimeAsset(tag_name=tag_name, name=name, download_url=download_url)
 
