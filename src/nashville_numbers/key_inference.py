@@ -130,8 +130,8 @@ def infer_sections(prog: str) -> list[tuple[str, KeyChoice]]:
     ]
 
 
-def _extract_chords(prog: str) -> list[tuple[str, str, bool, bool, bool]]:
-    chords: list[tuple[str, str, bool, bool, bool]] = []
+def _extract_chords(prog: str) -> list[tuple[int, str, bool, bool, bool]]:
+    chords: list[tuple[int, str, bool, bool, bool]] = []
     for token in tokenize_progression(prog):
         if token.kind != "chord":
             continue
@@ -145,17 +145,17 @@ def _extract_chords(prog: str) -> list[tuple[str, str, bool, bool, bool]]:
         is_dim_quality = "dim" in quality or "°" in quality or "m7b5" in quality
         is_dom_quality = "7" in quality and not quality.startswith("maj")
 
-        chords.append((root, quality, is_minor_quality, is_dim_quality, is_dom_quality))
+        chords.append((NOTE_TO_SEMITONE[root], quality, is_minor_quality, is_dim_quality, is_dom_quality))
     return chords
 
 
-def _score_key(chords: list[tuple[str, str, bool, bool, bool]], tonic: str, mode: str) -> float:
+def _score_key(chords: list[tuple[int, str, bool, bool, bool]], tonic: str, mode: str) -> float:
     tonic_val = NOTE_TO_SEMITONE[tonic]
     score = 0.0
     scale = MAJOR_SCALE if mode == "Major" else MINOR_SCALE
 
-    for root, quality, is_minor_quality, is_dim_quality, is_dom_quality in chords:
-        semitone = (NOTE_TO_SEMITONE[root] - tonic_val) % 12
+    for root_val, quality, is_minor_quality, is_dim_quality, is_dom_quality in chords:
+        semitone = (root_val - tonic_val) % 12
         in_scale = semitone in scale
         score += 2.5 if in_scale else -2.0
 
