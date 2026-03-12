@@ -30,6 +30,16 @@ def test_short_help_flag(capsys: pytest.CaptureFixture[str]) -> None:
         assert "Usage: nns-convert [PROGRESSION]" in captured.out
 
 
+def test_args_too_long(capsys: pytest.CaptureFixture[str]) -> None:
+    large_input = "C" * 1_000_001
+    with patch("sys.argv", ["nns-convert", large_input]):
+        with pytest.raises(SystemExit) as exc:
+            main()
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        assert "Input exceeds maximum length" in captured.err
+
+
 def test_args_conversion(capsys: pytest.CaptureFixture[str]) -> None:
     with patch("sys.argv", ["nns-convert", "C", "-", "F", "-", "G"]):
         with patch(
