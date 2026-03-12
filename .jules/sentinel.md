@@ -1,0 +1,4 @@
+## 2025-02-18 - Input Length Restriction on CLI Arguments
+**Vulnerability:** The CLI entrypoint `src/nashville_numbers/cli.py` correctly restricted standard input (`sys.stdin`) to a maximum length (`MAX_INPUT_LENGTH`) to prevent memory exhaustion and Denial of Service (DoS) attacks. However, it failed to enforce this same length restriction on inputs provided directly via command-line arguments (`sys.argv`).
+**Learning:** Security controls like input size limits must be applied homogeneously across *all* input vectors. Just because an OS might have `ARG_MAX` limits doesn't mean a process internally invoked with a massive mocked `sys.argv` (or across platforms with different limits) is protected from memory exhaustion when manipulating that data.
+**Prevention:** Ensure that any global limit constant (e.g., `MAX_INPUT_LENGTH`) is checked against the final resolved input payload regardless of how that payload was ingested (file, stdin, argv, HTTP body, etc.).
