@@ -274,6 +274,34 @@ def fake_audio_service(monkeypatch: pytest.MonkeyPatch) -> _FakeAudioService:
     return service
 
 
+def test_is_allowed_origin() -> None:
+    app = gui.GuiApp()
+    app._base_url = "http://127.0.0.1:8080"
+
+    # 1. Origin matches base_url exactly
+    assert app.is_allowed_origin("http://127.0.0.1:8080", None) is True
+    assert app.is_allowed_origin("http://127.0.0.1:8080", "http://attacker.com") is True
+
+    # 2. Origin does not match base_url
+    assert app.is_allowed_origin("http://attacker.com", None) is False
+    assert app.is_allowed_origin("http://attacker.com", "http://127.0.0.1:8080") is False
+
+    # 3. Origin is None, referer matches base_url exactly
+    assert app.is_allowed_origin(None, "http://127.0.0.1:8080") is True
+
+    # 4. Origin is None, referer starts with base_url + "/"
+    assert app.is_allowed_origin(None, "http://127.0.0.1:8080/some/path") is True
+
+    # 5. Origin is None, referer starts with base_url but no slash (should be false)
+    assert app.is_allowed_origin(None, "http://127.0.0.1:8080.attacker.com") is False
+
+    # 6. Origin is None, referer does not match at all
+    assert app.is_allowed_origin(None, "http://attacker.com") is False
+
+    # 7. Both Origin and Referer are None
+    assert app.is_allowed_origin(None, None) is True
+
+
 def test_handler_class_is_built_lazily_and_cached(monkeypatch: pytest.MonkeyPatch) -> None:
     built: list[dict[str, Any]] = []
 
