@@ -792,6 +792,29 @@ def test_post_audio_play_sequence_validates_kind(gui_server: int) -> None:
     assert payload["error"] == "Each event 'kind' must be 'note' or 'chord'"
 
 
+def test_panic_audio_calls_service(fake_audio_service: _FakeAudioService) -> None:
+    app = gui.GuiApp(audio_service_factory=lambda: fake_audio_service)
+    # The factory is evaluated upon init so we explicitly call get_audio_service to initialize it
+    app.get_audio_service()
+    app.panic_audio()
+    assert fake_audio_service.calls[-1] == ("panic",)
+
+
+def test_panic_audio_swallows_error(fake_audio_service: _FakeAudioService) -> None:
+    fake_audio_service.raise_for["panic"] = RuntimeError("boom")
+    app = gui.GuiApp(audio_service_factory=lambda: fake_audio_service)
+    app.get_audio_service()
+    app.panic_audio()
+    assert fake_audio_service.calls[-1] == ("panic",)
+
+
+def test_panic_audio_does_nothing_if_not_initialized(fake_audio_service: _FakeAudioService) -> None:
+    app = gui.GuiApp(audio_service_factory=lambda: fake_audio_service)
+    # Service not initialized, should not call factory or panic
+    app.panic_audio()
+    assert not fake_audio_service.calls
+
+
 def test_post_audio_panic_requires_json_object(gui_server: int) -> None:
     status, _headers, payload = _post_json(gui_server, "/audio/panic", ["not-object"])
     assert status == 400

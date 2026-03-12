@@ -1,6 +1,5 @@
 """Tests for the voicing module — verifying parity with JS chord voicing."""
 
-import pytest
 
 from nashville_numbers.voicing import (
     extract_chord_root,
