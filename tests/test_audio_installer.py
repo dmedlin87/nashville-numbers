@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 import zipfile as zipfile_module
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
