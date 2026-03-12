@@ -223,27 +223,38 @@ class ToneLibrary:
             "raw_fields": raw_fields,
         }
 
-    def _load_manifest(self) -> dict[str, list[dict[str, Any]]]:
+    def _load_manifest(self) -> dict[str, Any]:
         if not self.manifest_path.exists():
-            return {"tones": [], "irs": []}
+            return {"tones": [], "irs": [], "_tones_by_id": {}, "_irs_by_id": {}}
         try:
             payload = json.loads(self.manifest_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return {"tones": [], "irs": []}
+            return {"tones": [], "irs": [], "_tones_by_id": {}, "_irs_by_id": {}}
         if not isinstance(payload, dict):
-            return {"tones": [], "irs": []}
+            return {"tones": [], "irs": [], "_tones_by_id": {}, "_irs_by_id": {}}
+
         tones = payload.get("tones")
         irs = payload.get("irs")
+
+        valid_tones = tones if isinstance(tones, list) else []
+        valid_irs = irs if isinstance(irs, list) else []
+
         return {
-            "tones": tones if isinstance(tones, list) else [],
-            "irs": irs if isinstance(irs, list) else [],
+            "tones": valid_tones,
+            "irs": valid_irs,
+            "_tones_by_id": {str(r.get("id", "")): r for r in valid_tones},
+            "_irs_by_id": {str(r.get("id", "")): r for r in valid_irs},
         }
 
     def _save_manifest(self, manifest: dict[str, Any]) -> None:
         self.root_dir.mkdir(parents=True, exist_ok=True)
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.irs_dir.mkdir(parents=True, exist_ok=True)
-        text = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+        payload = {
+            "tones": manifest.get("tones", []),
+            "irs": manifest.get("irs", []),
+        }
+        text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
         self._atomic_write_text(self.manifest_path, text)
 
     def _atomic_write_text(self, path: Path, text: str) -> None:
@@ -317,19 +328,27 @@ class ToneLibrary:
         return secrets.token_hex(8)
 
     def _find_tone(self, manifest: dict[str, Any], tone_id: str) -> dict[str, Any] | None:
-        for record in manifest["tones"]:
+        tone_map = manifest.get("_tones_by_id")
+        if tone_map is not None:
+            return tone_map.get(tone_id)
+
+        for record in manifest.get("tones", []):
             if str(record.get("id", "")) == tone_id:
                 return record
         return None
 
     def _find_tone_index(self, manifest: dict[str, Any], tone_id: str) -> int | None:
-        for idx, record in enumerate(manifest["tones"]):
+        for idx, record in enumerate(manifest.get("tones", [])):
             if str(record.get("id", "")) == tone_id:
                 return idx
         return None
 
     def _find_ir(self, manifest: dict[str, Any], ir_id: str) -> dict[str, Any] | None:
-        for record in manifest["irs"]:
+        ir_map = manifest.get("_irs_by_id")
+        if ir_map is not None:
+            return ir_map.get(ir_id)
+
+        for record in manifest.get("irs", []):
             if str(record.get("id", "")) == ir_id:
                 return record
         return None
