@@ -22,6 +22,12 @@ def main() -> None:
             print('  echo "C - F - G" | nns-convert')
             sys.exit(0)
         input_text = " ".join(sys.argv[1:])
+        if len(input_text) > MAX_INPUT_LENGTH:
+            print(
+                f"Input exceeds maximum length of {MAX_INPUT_LENGTH} characters.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
     else:
         if sys.stdin.isatty():
             print("Usage: nns-convert [PROGRESSION]", file=sys.stderr)

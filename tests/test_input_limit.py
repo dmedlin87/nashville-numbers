@@ -26,3 +26,21 @@ def test_stdin_read_limit(monkeypatch, capsys):
 
     assert captured.out == ""
     assert captured.err == "Input exceeds maximum length of 5 characters.\n"
+
+
+def test_argv_read_limit(monkeypatch, capsys):
+    # Set a very small limit for testing
+    test_limit = 5
+    monkeypatch.setattr(cli, "MAX_INPUT_LENGTH", test_limit)
+
+    # "C F G Bb" is 8 characters
+    monkeypatch.setattr(sys, "argv", ["nns-convert", "C", "F", "G", "Bb"])
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert captured.err == "Input exceeds maximum length of 5 characters.\n"
