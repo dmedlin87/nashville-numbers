@@ -2474,10 +2474,10 @@ _HTML = r"""<!DOCTYPE html>
 
           <div class="transport-row">
             <button class="btn-transport primary" id="arrangementBuildBtn" onclick="buildArrangement()">Build Arrangement</button>
-            <button class="btn-transport secondary" id="arrangementPlayBtn" onclick="playArrangement()" disabled>Play</button>
-            <button class="btn-transport ghost" id="arrangementStopBtn" onclick="stopArrangement()">Stop</button>
+            <button class="btn-transport secondary" id="arrangementPlayBtn" onclick="playArrangement()" disabled title="Build an arrangement first">Play</button>
+            <button class="btn-transport ghost" id="arrangementStopBtn" onclick="stopArrangement()" disabled title="Transport is stopped">Stop</button>
             <button class="btn-transport loop-toggle active" id="loopToggleBtn" onclick="toggleLoop()" title="Loop on/off" aria-pressed="true">&#x21BB; Loop</button>
-            <button class="btn-transport secondary" id="arrangementExportBtn" onclick="exportMidi()" disabled>Export MIDI</button>
+            <button class="btn-transport secondary" id="arrangementExportBtn" onclick="exportMidi()" disabled title="Build an arrangement first">Export MIDI</button>
           </div>
 
           <div class="lab-transport-status" id="labTransportStatus">
@@ -3145,9 +3145,18 @@ function syncArrangementButtons() {
   const playBtn = document.getElementById('arrangementPlayBtn');
   const stopBtn = document.getElementById('arrangementStopBtn');
   const exportBtn = document.getElementById('arrangementExportBtn');
-  if (playBtn) playBtn.disabled = !musicLabState.plan;
-  if (stopBtn) stopBtn.disabled = !musicLabState.isPlaying;
-  if (exportBtn) exportBtn.disabled = !musicLabState.plan;
+  if (playBtn) {
+    playBtn.disabled = !musicLabState.plan;
+    playBtn.title = playBtn.disabled ? 'Build an arrangement first' : '';
+  }
+  if (stopBtn) {
+    stopBtn.disabled = !musicLabState.isPlaying;
+    stopBtn.title = stopBtn.disabled ? 'Transport is stopped' : '';
+  }
+  if (exportBtn) {
+    exportBtn.disabled = !musicLabState.plan;
+    exportBtn.title = exportBtn.disabled ? 'Build an arrangement first' : '';
+  }
 }
 
 function refreshMusicLabRuntimeSummary() {
