@@ -2480,7 +2480,7 @@ _HTML = r"""<!DOCTYPE html>
             <button class="btn-transport secondary" id="arrangementExportBtn" onclick="exportMidi()" disabled>Export MIDI</button>
           </div>
 
-          <div class="lab-transport-status" id="labTransportStatus">
+          <div class="lab-transport-status" id="labTransportStatus" aria-live="polite">
             Waiting for a progression. The first implementation stage is a transport and arrangement planner on top of the current playback stack.
           </div>
 
@@ -3145,9 +3145,18 @@ function syncArrangementButtons() {
   const playBtn = document.getElementById('arrangementPlayBtn');
   const stopBtn = document.getElementById('arrangementStopBtn');
   const exportBtn = document.getElementById('arrangementExportBtn');
-  if (playBtn) playBtn.disabled = !musicLabState.plan;
-  if (stopBtn) stopBtn.disabled = !musicLabState.isPlaying;
-  if (exportBtn) exportBtn.disabled = !musicLabState.plan;
+  if (playBtn) {
+    playBtn.disabled = !musicLabState.plan;
+    playBtn.title = playBtn.disabled ? 'Build an arrangement first' : '';
+  }
+  if (stopBtn) {
+    stopBtn.disabled = !musicLabState.isPlaying;
+    stopBtn.title = stopBtn.disabled ? 'Transport is stopped' : '';
+  }
+  if (exportBtn) {
+    exportBtn.disabled = !musicLabState.plan;
+    exportBtn.title = exportBtn.disabled ? 'Build an arrangement first' : '';
+  }
 }
 
 function refreshMusicLabRuntimeSummary() {
@@ -3278,8 +3287,10 @@ function slotKeyFromIndexes(sectionIndex, barIndex, slotIndex) {
 
 function selectArrangementSlot(slotKey, playing = false) {
   document.querySelectorAll('.timeline-slot').forEach(node => {
-    node.classList.toggle('active', node.dataset.slotKey === slotKey);
-    if (node.dataset.slotKey !== slotKey && !playing) node.classList.remove('is-playing');
+    const isActive = node.dataset.slotKey === slotKey;
+    node.classList.toggle('active', isActive);
+    node.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    if (!isActive && !playing) node.classList.remove('is-playing');
   });
   musicLabState.activeSlotKey = slotKey;
 }
@@ -3373,6 +3384,7 @@ function renderArrangementTimeline() {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'timeline-slot';
+        button.setAttribute('aria-pressed', 'false');
         button.dataset.slotKey = slotKeyFromIndexes(sectionIndex, barIndex, slotIndex);
         button.addEventListener('click', () => previewArrangementSlot(sectionIndex, barIndex, slotIndex));
 
