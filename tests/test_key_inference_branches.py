@@ -79,6 +79,6 @@ def test_infer_sections_falls_back_when_split_would_make_empty_segment(
 
 
 def test_score_key_rewards_leading_tone_diminished_chord_in_major() -> None:
-    diminished = [("B", "dim", False, True, False)]
-    plain = [("B", "", False, False, False)]
+    diminished = [(11, "dim", False, True, False)]
+    plain = [(11, "", False, False, False)]
     assert _score_key(diminished, "C", "Major") > _score_key(plain, "C", "Major")
