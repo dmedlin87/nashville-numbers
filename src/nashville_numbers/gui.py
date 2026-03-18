@@ -317,6 +317,11 @@ _HTML = r"""<!DOCTYPE html>
     overflow-x: hidden;
   }
 
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
   /* ── Warm studio texture background ────────────────────────────────────── */
   body::before {
     content: '';
@@ -494,7 +499,6 @@ _HTML = r"""<!DOCTYPE html>
 
   .btn-convert:hover  { filter: brightness(1.15); transform: translateY(-1px); box-shadow: 0 6px 28px rgba(212,145,92,0.55); }
   .btn-convert:active { filter: brightness(0.95); transform: translateY(0); }
-  .btn-convert:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .btn-convert.loading { opacity: 0.7; pointer-events: none; }
 
   .btn-convert .spinner {
@@ -523,8 +527,6 @@ _HTML = r"""<!DOCTYPE html>
     cursor: pointer;
     transition: border-color var(--transition), color var(--transition), background var(--transition);
   }
-
-  .btn-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   .btn-clear:hover {
     border-color: var(--accent);
@@ -632,7 +634,6 @@ _HTML = r"""<!DOCTYPE html>
     opacity: 1;
   }
 
-  .btn-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .btn-copy:hover { background: var(--surface2); color: var(--text); }
   .btn-copy.copied { color: var(--success); border-color: rgba(74,222,128,0.4); }
 
@@ -1810,8 +1811,6 @@ _HTML = r"""<!DOCTYPE html>
     transform: translateY(-1px);
     border-color: rgba(212, 145, 92, 0.55);
   }
-
-  .btn-transport:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   .btn-transport:disabled {
     opacity: 0.42;
