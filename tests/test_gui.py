@@ -293,6 +293,15 @@ def test_handler_class_is_built_lazily_and_cached(monkeypatch: pytest.MonkeyPatc
     assert len(built) == 1
 
 
+def test_issue_session_cookie() -> None:
+    app = gui.GuiApp()
+    app._session_cookie_name = "test_cookie"
+    app._session_id = "test_id"
+    app._session_secret = "test_secret"
+
+    cookie = app.issue_session_cookie()
+    assert cookie == "test_cookie=test_id.test_secret; HttpOnly; SameSite=Strict; Path=/"
+
 def test_get_root_serves_embedded_html(gui_server: int) -> None:
     status, headers, body = _request(gui_server, "GET", "/")
     assert status == 200
