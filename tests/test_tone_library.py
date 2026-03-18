@@ -69,7 +69,7 @@ def test_import_ir_attach_detach_and_orphan_cleanup(tmp_path) -> None:
     tone = library.import_model(filename="tone.nam", data=_valid_model())
 
     payload = library.import_ir(filename="cab.wav", data=b"RIFF....WAVE", tone_id=tone["id"])
-    ir_id = payload["ir"]["id"]
+    payload["ir"]["id"]
     ir_file = payload["ir"]["file"]
     assert (library.irs_dir / ir_file).exists()
 
